@@ -1,0 +1,22 @@
+{
+  "name": "ZeMe",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "probe": "node tools/probe-sdu.mjs",
+    "server": "node server/index.mjs",
+    "demo": "DEMO=1 node server/index.mjs",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "start": "npm run web:build && node server/index.mjs",
+    "test": "node tools/test-parsers.mjs"
+  },
+  "private": true,
+  "dependencies": {
+    "cheerio": "^1.2.0",
+    "express": "^5.2.1",
+    "undici": "^8.10.2"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm --prefix web install --no-audit --no-fund && npm --prefix web run build",
+  "outputDirectory": "web/dist",
+  "regions": ["fra1"],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/((?!api/|assets/|favicon).*)", "destination": "/index.html" }
+  ]
+}

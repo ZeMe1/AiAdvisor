@@ -1,0 +1,7 @@
+# Персональные данные и локальный мусор не должны попадать в деплой
+dumps/
+.idea/
+.vercel/
+web/node_modules/
+node_modules/
+*.log

@@ -1,0 +1,27 @@
+async function j(url, opts = {}) {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || res.statusText);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+const post = (url, body) => ({ method: 'POST', body: JSON.stringify(body) });
+
+export const api = {
+  login: (username, password) => j('/api/auth/login', post('/api/auth/login', { username, password })),
+  twoFa: (code) => j('/api/auth/2fa', post('/api/auth/2fa', { code })),
+  logout: () => j('/api/auth/logout', { method: 'POST' }),
+  me: () => j('/api/me'),
+  curriculum: () => j('/api/curriculum'),
+  sections: (code, mufSqId) =>
+    j(`/api/sections?code=${encodeURIComponent(code)}${mufSqId ? `&mufSqId=${encodeURIComponent(mufSqId)}` : ''}`),
+  search: (code) => j(`/api/search?code=${encodeURIComponent(code)}`),
+  electives: (payload) => j('/api/electives', post('/api/electives', payload)),
+};
