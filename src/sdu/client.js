@@ -116,7 +116,13 @@ export class SduClient {
   }
 
   async #req(method, path, { form, referer, xhr } = {}) {
-    const url = path.startsWith('http') ? path : BASE + path;
+    let url;
+    if (path.startsWith('http')) {
+      url = path;
+    } else {
+      const normalizedPath = path.startsWith('/') ? path : '/' + path;
+      url = BASE + normalizedPath;
+    }
     const headers = { 'User-Agent': UA, Accept: 'text/html,application/json,*/*' };
     if (this.jar.size) headers.Cookie = this.#cookieHeader();
     if (form) headers['Content-Type'] = 'application/x-www-form-urlencoded';
