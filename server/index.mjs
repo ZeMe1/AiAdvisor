@@ -19,10 +19,8 @@ import { SduClient } from '../src/sdu/client.js';
 import { demo } from './demo-data.mjs';
 import { initDb, pool, bcrypt } from './db.mjs';
 
-// Initialize DB on startup
-if (!process.env.VERCEL) {
-  initDb().catch(console.error);
-}
+// Initialize DB on startup (CREATE TABLE IF NOT EXISTS — safe to run repeatedly)
+initDb().catch(console.error);
 
 
 const PORT = Number(process.env.PORT || 3001);
