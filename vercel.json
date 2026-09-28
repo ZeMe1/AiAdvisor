@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "name": "ai-advisor",
   "buildCommand": "npm --prefix web install --no-audit --no-fund && npm --prefix web run build",
   "outputDirectory": "web/dist",
   "regions": ["fra1"],
