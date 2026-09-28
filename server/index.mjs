@@ -32,7 +32,7 @@ app.use(express.json({ limit: '64kb' }));
 // ------------------------------------------------- сессия в подписанной куке
 const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const COOKIE = 'zeme_sdu';
-const COOKIE_MAX_AGE = 12 * 60 * 60; // 12 часов, как и жизнь PHPSESSID портала
+const COOKIE_MAX_AGE = 24 * 60 * 60; // 24 часа
 
 const sign = (payload) => crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
 
