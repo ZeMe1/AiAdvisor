@@ -69,6 +69,8 @@ code { font-family: inherit; }
 .btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
 .btn-primary:hover { background: #004d9e; }
 .btn-ghost { background: transparent; border-color: #5a6f9c; color: #dfe6f5; }
+.btn-danger { background: #f6c9c9; border-color: #d98a8a; color: #7c1a1a; }
+.btn-danger:hover { background: #f1b3b3; }
 .btn-mini { padding: 1px 7px; font-size: 11px; }
 
 /* ---------- таблицы ---------- */

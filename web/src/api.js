@@ -24,4 +24,9 @@ export const api = {
     j(`/api/sections?code=${encodeURIComponent(code)}${mufSqId ? `&mufSqId=${encodeURIComponent(mufSqId)}` : ''}`),
   search: (code) => j(`/api/search?code=${encodeURIComponent(code)}`),
   electives: (payload) => j('/api/electives', post('/api/electives', payload)),
+  profile: () => j('/api/profile'),
+  updateProfile: (body) => j('/api/profile', { method: 'PUT', body: JSON.stringify(body) }),
+  adminGetUsers: () => j('/api/admin/users'),
+  adminUpdateRole: (username, role) => j(`/api/admin/users/${encodeURIComponent(username)}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
+  adminBlockUser: (username, is_blocked) => j(`/api/admin/users/${encodeURIComponent(username)}/block`, { method: 'PUT', body: JSON.stringify({ is_blocked }) }),
 };

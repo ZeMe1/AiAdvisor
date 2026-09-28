@@ -17,6 +17,13 @@ import path from 'node:path';
 import express from 'express';
 import { SduClient } from '../src/sdu/client.js';
 import { demo } from './demo-data.mjs';
+import { initDb, pool, bcrypt } from './db.mjs';
+
+// Initialize DB on startup
+if (!process.env.VERCEL) {
+  initDb().catch(console.error);
+}
+
 
 const PORT = Number(process.env.PORT || 3001);
 const DEMO = process.env.DEMO === '1';
@@ -32,7 +39,12 @@ const COOKIE_MAX_AGE = 12 * 60 * 60; // 12 часов, как и жизнь PHPS
 const sign = (payload) => crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
 
 function packSession(client) {
-  const payload = Buffer.from(JSON.stringify({ s: client.status, c: Object.fromEntries(client.jar) }))
+  const payload = Buffer.from(JSON.stringify({ 
+    s: client.status, 
+    c: Object.fromEntries(client.jar),
+    lu: client.localUsername,
+    lr: client.localRole
+  }))
     .toString('base64url');
   return `v1.${payload}.${sign(payload)}`;
 }
@@ -54,9 +66,11 @@ function unpackSession(req) {
   const expected = sign(payload);
   if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   try {
-    const { s, c } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    const { s, c, lu, lr } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     const client = new SduClient();
     client.status = s === 'pending_2fa' || s === 'authed' ? s : 'anonymous';
+    client.localUsername = lu;
+    client.localRole = lr;
     for (const [k, val] of Object.entries(c ?? {})) {
       if (typeof val === 'string') client.jar.set(k, val);
     }
@@ -146,8 +160,29 @@ app.post('/api/auth/login', wrap(async (req, res) => {
   const client = req.client && req.client.status === 'pending_2fa' ? req.client : new SduClient();
   const r = await client.login(String(username), String(password));
   if (!r.ok) throw new HttpError(401, 'Неверный логин или пароль');
+
+  // DB Logic
+  const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+  let user = rows[0];
+  if (!user) {
+    const hash = await bcrypt.hash(password, 10);
+    const insertRes = await pool.query(
+      'INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING *',
+      [username, hash]
+    );
+    user = insertRes.rows[0];
+  } else {
+    if (user.is_blocked) {
+      throw new HttpError(403, 'Ваш аккаунт заблокирован');
+    }
+    // Update password hash if needed, but not strictly necessary now.
+  }
+  // Attach local username to client so it gets packed into session cookie
+  client.localUsername = user.username;
+  client.localRole = user.role;
+
   setSessionCookie(res, client);
-  res.json({ status: r.needs2fa ? '2fa_required' : 'ok' });
+  res.json({ status: r.needs2fa ? '2fa_required' : 'ok', role: user.role });
 }));
 
 app.post('/api/auth/2fa', wrap(async (req, res) => {
@@ -258,6 +293,67 @@ app.get('/api/search', wrap(async (req, res) => {
   const cache = cacheFor(client);
   await getCurriculum(client, cache); // заодно валидирует сессию и кладёт defaults
   res.json(await client.searchCourse(code, cache.me?.progTrack ?? 'TRACK0'));
+}));
+
+// ------------------------------------------------------------------ профиль
+app.get('/api/profile', wrap(async (req, res) => {
+  const client = requireAuth(req);
+  if (!client.localUsername) throw new HttpError(401, 'Не найден локальный пользователь');
+  const { rows } = await pool.query('SELECT username, display_name, avatar_url, role FROM users WHERE username = $1', [client.localUsername]);
+  if (rows.length === 0) throw new HttpError(404, 'Профиль не найден');
+  res.json(rows[0]);
+}));
+
+app.put('/api/profile', wrap(async (req, res) => {
+  const client = requireAuth(req);
+  if (!client.localUsername) throw new HttpError(401, 'Не найден локальный пользователь');
+  const { display_name, avatar_url } = req.body ?? {};
+  
+  const { rows } = await pool.query(
+    'UPDATE users SET display_name = $1, avatar_url = $2 WHERE username = $3 RETURNING username, display_name, avatar_url, role',
+    [display_name, avatar_url, client.localUsername]
+  );
+  res.json(rows[0]);
+}));
+
+function requireAdmin(req) {
+  const client = requireAuth(req);
+  if (client.localRole !== 'Administrator') {
+    throw new HttpError(403, 'Доступ запрещен. Требуются права администратора.');
+  }
+  return client;
+}
+
+// ------------------------------------------------------------------ админка
+app.get('/api/admin/users', wrap(async (req, res) => {
+  requireAdmin(req);
+  const { rows } = await pool.query('SELECT id, username, display_name, role, is_blocked, created_at FROM users ORDER BY created_at DESC');
+  res.json(rows);
+}));
+
+app.put('/api/admin/users/:username/role', wrap(async (req, res) => {
+  requireAdmin(req);
+  const { role } = req.body ?? {};
+  if (!['Student', 'Advisor', 'Administrator'].includes(role)) {
+    throw new HttpError(400, 'Недопустимая роль');
+  }
+  const { rows } = await pool.query(
+    'UPDATE users SET role = $1 WHERE username = $2 RETURNING id, username, role',
+    [role, req.params.username]
+  );
+  if (rows.length === 0) throw new HttpError(404, 'Пользователь не найден');
+  res.json(rows[0]);
+}));
+
+app.put('/api/admin/users/:username/block', wrap(async (req, res) => {
+  requireAdmin(req);
+  const { is_blocked } = req.body ?? {};
+  const { rows } = await pool.query(
+    'UPDATE users SET is_blocked = $1 WHERE username = $2 RETURNING id, username, is_blocked',
+    [!!is_blocked, req.params.username]
+  );
+  if (rows.length === 0) throw new HttpError(404, 'Пользователь не найден');
+  res.json(rows[0]);
 }));
 
 // Список курсов элективной группы (заглушка XXX ...): сначала пробуем эндпоинт

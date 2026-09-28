@@ -7,6 +7,8 @@ import Basket from './components/Basket.jsx';
 import Curriculum from './components/Curriculum.jsx';
 import CoursePage from './components/CoursePage.jsx';
 import ElectivesPage from './components/ElectivesPage.jsx';
+import ProfilePage from './components/ProfilePage.jsx';
+import AdminPanel from './components/AdminPanel.jsx';
 
 const PLAN_KEY = 'zeme_plan_v1';
 const loadPlan = () => {
@@ -19,6 +21,8 @@ export default function App() {
   const [stage, setStage] = useState('boot'); // boot | login | 2fa | main
   const [view, setView] = useState('home'); // home | course | electives
   const [me, setMe] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [curriculum, setCurriculum] = useState(null);
   const [plan, setPlan] = useState(loadPlan);
   const [open, setOpen] = useState(null); // { code, name, data } — курс на странице курса
@@ -33,7 +37,11 @@ export default function App() {
   const [loginNotice, setLoginNotice] = useState(null);
 
   useEffect(() => {
-    api.me().then((m) => { setMe(m); setStage('main'); }).catch(() => setStage('login'));
+    api.me().then((m) => { 
+      setMe(m); 
+      setStage('main'); 
+      if (!m.demo) api.profile().then(setProfile).catch(console.error);
+    }).catch(() => setStage('login'));
   }, []);
 
   useEffect(() => {
@@ -51,6 +59,9 @@ export default function App() {
     setMe(m);
     setStage('main');
     api.curriculum().then(setCurriculum).catch((e) => setError(e.message));
+    if (!m.demo) {
+      api.profile().then(setProfile).catch(console.error);
+    }
   }
 
   async function handleLogin(username, password) {
@@ -210,14 +221,52 @@ export default function App() {
           {me.user?.name && <span>{me.user.name} · {me.user.program}</span>}
           {me.demo && <span className="demo-badge">demo data</span>}
         </span>
-        <button className="btn btn-ghost" onClick={async () => { await api.logout(); location.reload(); }}>
-          Sign out
-        </button>
+        <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {profile?.role === 'Administrator' && (
+            <button className="btn" onClick={() => { setView('admin'); window.scrollTo(0,0); }}>
+              Admin Panel
+            </button>
+          )}
+          {profile && (
+            <div 
+              className="profile-btn" 
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }} 
+              onClick={() => { setView('profile'); window.scrollTo(0,0); }}
+            >
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt="Avatar" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: '#0052cc', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {profile.display_name ? profile.display_name[0].toUpperCase() : profile.username[0].toUpperCase()}
+                </div>
+              )}
+              <span>{profile.display_name || profile.username}</span>
+            </div>
+          )}
+          <button className="btn btn-ghost" onClick={async () => { await api.logout(); location.reload(); }}>
+            Sign out
+          </button>
+        </div>
       </header>
 
       {error && <div className="banner-error" onClick={() => setError(null)}>{error} ✕</div>}
 
-      {view === 'course' && open ? (
+      {view === 'admin' && profile?.role === 'Administrator' ? (
+        <main className="page">
+          <AdminPanel onBack={backToHome} />
+        </main>
+      ) : view === 'profile' && profile ? (
+        <main className="page">
+          <ProfilePage 
+            profile={profile}
+            onSave={async (data) => {
+              const updated = await api.updateProfile(data);
+              setProfile(updated);
+            }}
+            onBack={backToHome}
+          />
+        </main>
+      ) : view === 'course' && open ? (
         <main className="page">
           <CoursePage
             me={me} open={open} draft={draft} setDraft={setDraft}
