@@ -37,13 +37,27 @@ const COOKIE_MAX_AGE = 24 * 60 * 60; // 24 часа
 const sign = (payload) => crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
 
 function packSession(client) {
+  const c = {};
+  for (const [k, v] of client.jar) {
+    if (/^(_ga|_gid|_gat|G_ENABLED_IDPS)/i.test(k)) continue; // ignore known analytics
+    c[k] = v;
+  }
+  
+  // Browser cookie limit is 4096 bytes. If our jar gets too large, 
+  // drop non-essential cookies to prevent silent rejection on set-cookie.
+  if (JSON.stringify(c).length > 2500) {
+    for (const k of Object.keys(c)) {
+      if (!/^(PHPSESSID|__cf_bm|cf_clearance|TS.*)$/i.test(k)) delete c[k];
+    }
+  }
+
   const payload = Buffer.from(JSON.stringify({ 
     s: client.status, 
-    c: Object.fromEntries(client.jar),
+    c,
     lu: client.localUsername,
     lr: client.localRole
-  }))
-    .toString('base64url');
+  })).toString('base64url');
+  
   return `v1.${payload}.${sign(payload)}`;
 }
 
@@ -51,18 +65,41 @@ function parseCookies(req) {
   const out = {};
   for (const part of (req.headers.cookie || '').split(';')) {
     const i = part.indexOf('=');
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    if (i > 0) {
+      const key = part.slice(0, i).trim();
+      const val = part.slice(i + 1).trim();
+      try {
+        out[key] = decodeURIComponent(val);
+      } catch {
+        out[key] = val; // fallback for malformed URI sequences
+      }
+    }
   }
   return out;
 }
 
+import fs from 'node:fs';
+const LOG_FILE = path.join(process.cwd(), 'session_debug.log');
+function logDebug(msg) {
+  fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`);
+}
+
 function unpackSession(req) {
   const raw = parseCookies(req)[COOKIE];
-  if (!raw) return null;
+  if (!raw) {
+    logDebug('unpackSession: no cookie found in req.headers.cookie');
+    return null;
+  }
   const [v, payload, sig] = raw.split('.');
-  if (v !== 'v1' || !payload || !sig) return null;
+  if (v !== 'v1' || !payload || !sig) {
+    logDebug(`unpackSession: invalid format. v=${v}, hasPayload=${!!payload}, hasSig=${!!sig}`);
+    return null;
+  }
   const expected = sign(payload);
-  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+    logDebug(`unpackSession: signature mismatch. sig=${sig.length}, expected=${expected.length}`);
+    return null;
+  }
   try {
     const { s, c, lu, lr } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     const client = new SduClient();
@@ -72,14 +109,17 @@ function unpackSession(req) {
     for (const [k, val] of Object.entries(c ?? {})) {
       if (typeof val === 'string') client.jar.set(k, val);
     }
+    logDebug(`unpackSession: success for ${lu}, jar size: ${client.jar.size}`);
     return client;
-  } catch {
+  } catch (err) {
+    logDebug(`unpackSession: JSON parse error: ${err.message}`);
     return null;
   }
 }
 
 function setSessionCookie(res, client) {
-  res.setHeader('Set-Cookie', `${COOKIE}=${packSession(client)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}`);
+  const packed = packSession(client);
+  res.setHeader('Set-Cookie', `${COOKIE}=${packed}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}`);
 }
 
 function clearSessionCookie(res) {
@@ -87,6 +127,7 @@ function clearSessionCookie(res) {
 }
 
 app.use((req, _res, next) => {
+  logDebug(`Incoming request: ${req.method} ${req.path}`);
   req.client = unpackSession(req);
   next();
 });
