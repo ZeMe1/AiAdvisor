@@ -30,7 +30,7 @@ const app = express();
 app.use(express.json({ limit: '64kb' }));
 
 // ------------------------------------------------- сессия в подписанной куке
-const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+const SECRET = process.env.SESSION_SECRET || 'zeme_default_secret_for_vercel_and_dev_0123456789';
 const COOKIE = 'zeme_sdu';
 const COOKIE_MAX_AGE = 24 * 60 * 60; // 24 часа
 
@@ -113,14 +113,26 @@ class HttpError extends Error {
 }
 
 const wrap = (fn) => async (req, res) => {
+  const oldJson = res.json;
+  res.json = function (body) {
+    if (res.statusCode >= 200 && res.statusCode < 400 && req.client && req.client.status !== 'anonymous') {
+      setSessionCookie(res, req.client);
+    }
+    return oldJson.call(this, body);
+  };
+  
   try {
     await fn(req, res);
   } catch (e) {
     const expired = e.sessionExpired === true;
-    if (expired) clearSessionCookie(res);
+    if (expired) {
+      req.client = null;
+      clearSessionCookie(res);
+    }
     const status = expired ? 401 : (e instanceof HttpError ? e.status : 502);
     if (status >= 500) console.error(`[api] ${req.method} ${req.path}:`, e.message);
-    res.status(status).json({ error: e.message || 'internal error', ...(expired ? { sessionExpired: true } : {}) });
+    res.status(status);
+    oldJson.call(this, { error: e.message || 'internal error', ...(expired ? { sessionExpired: true } : {}) });
   }
 };
 
@@ -195,6 +207,7 @@ app.post('/api/auth/2fa', wrap(async (req, res) => {
 }));
 
 app.post('/api/auth/logout', wrap(async (req, res) => {
+  req.client = null;
   clearSessionCookie(res);
   res.json({ status: 'ok' });
 }));
