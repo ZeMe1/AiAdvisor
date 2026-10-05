@@ -107,11 +107,28 @@ export class SduClient {
     return [...this.jar].map(([k, v]) => `${k}=${v}`).join('; ');
   }
 
+  jarAsObject() {
+    return Object.fromEntries(this.jar);
+  }
+
   #absorb(res) {
+    let changed = false;
     for (const c of res.headers.getSetCookie?.() ?? []) {
       const pair = c.split(';')[0];
       const i = pair.indexOf('=');
-      if (i > 0) this.jar.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
+      if (i > 0) {
+        const k = pair.slice(0, i).trim();
+        const v = pair.slice(i + 1).trim();
+        if (this.jar.get(k) !== v) {
+          this.jar.set(k, v);
+          changed = true;
+        }
+      }
+    }
+    if (changed && typeof this.onJarChange === 'function') {
+      try {
+        this.onJarChange(this.jar);
+      } catch { /* ignore callback errors */ }
     }
   }
 
@@ -185,6 +202,16 @@ export class SduClient {
     await this.#req('GET', r.location || '/loginAuth.php?verified=1');
     this.status = 'authed';
     return { ok: true };
+  }
+
+  /** Завершение сессии на портале SDU (best-effort) + очистка локального состояния. */
+  async logout() {
+    if (this.status === 'anonymous') return;
+    try {
+      await this.#req('GET', '/index.php?mod=logout');
+    } catch { /* портал недоступен — всё равно чистим локальное состояние */ }
+    this.jar.clear();
+    this.status = 'anonymous';
   }
 
   /**

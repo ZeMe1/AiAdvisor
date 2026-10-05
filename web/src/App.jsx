@@ -54,20 +54,40 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem(PLAN_KEY, JSON.stringify(plan)); }, [plan]);
 
+  const [syncing, setSyncing] = useState(false);
+
   async function loadMain() {
     const m = await api.me();
     setMe(m);
     setStage('main');
-    api.curriculum().then(setCurriculum).catch((e) => setError(e.message));
     if (!m.demo) {
       api.profile().then(setProfile).catch(console.error);
     }
   }
 
+  async function handleSyncSdu() {
+    setSyncing(true);
+    setError(null);
+    try {
+      const m = await api.me(true);
+      setMe(m);
+      const c = await api.curriculum();
+      setCurriculum(c);
+    } catch (e) {
+      if (!authFail(e)) setError('Ошибка синхронизации: ' + e.message);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function handleLogin(username, password) {
     const r = await api.login(username, password);
-    if (r.status === '2fa_required') { setStage('2fa'); return; }
+    if (r.status === '2fa_required') {
+      setStage('2fa');
+      return r;
+    }
     await loadMain();
+    return r;
   }
 
   async function handle2fa(code) {
@@ -100,9 +120,9 @@ export default function App() {
 
   /** 401 от нашего API — сессия портала истекла, отправляем на логин. */
   function authFail(e) {
-    if (e?.status !== 401) return false;
+    if (e?.status !== 401 && !e?.sessionExpired) return false;
     setStage('login');
-    setLoginNotice('Сессия портала истекла — войдите заново, придёт новый код 2FA');
+    setLoginNotice('Сессия портала истекла — войдите заново');
     return true;
   }
 
@@ -221,7 +241,18 @@ export default function App() {
           {me.user?.name && <span>{me.user.name} · {me.user.program}</span>}
           {me.demo && <span className="demo-badge">demo data</span>}
         </span>
-        <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {!me.demo && (
+            <button
+              className="btn btn-ghost"
+              disabled={syncing}
+              onClick={handleSyncSdu}
+              title="Синхронизировать данные с портала SDU"
+              style={{ fontSize: '0.85rem' }}
+            >
+              {syncing ? '⟳ Синхронизация…' : '⟳ Обновить с SDU'}
+            </button>
+          )}
           {profile?.role === 'Administrator' && (
             <button className="btn" onClick={() => { setView('admin'); window.scrollTo(0,0); }}>
               Admin Panel

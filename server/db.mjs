@@ -37,8 +37,46 @@ export async function initDb() {
       is_blocked BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id VARCHAR(64) PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      username VARCHAR(255) NOT NULL,
+      role VARCHAR(50) NOT NULL,
+      status VARCHAR(50) NOT NULL,
+      sdu_jar JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '7 days')
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+    CREATE TABLE IF NOT EXISTS student_data_cache (
+      username VARCHAR(255) PRIMARY KEY,
+      term VARCHAR(100),
+      is_approved BOOLEAN DEFAULT false,
+      track JSONB,
+      prog_track VARCHAR(50),
+      approved_courses JSONB DEFAULT '[]'::jsonb,
+      basket_schedule JSONB DEFAULT '[]'::jsonb,
+      cached_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS curriculum_cache (
+      track_id VARCHAR(50) PRIMARY KEY,
+      curriculum JSONB NOT NULL,
+      sections_defaults JSONB,
+      cached_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS course_sections_cache (
+      cache_key VARCHAR(255) PRIMARY KEY,
+      data JSONB NOT NULL,
+      cached_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
   `);
-  console.log('Database initialized.');
+  console.log('Database initialized with sessions & caching tables.');
 }
 
 export { pool, bcrypt };
