@@ -54,29 +54,12 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem(PLAN_KEY, JSON.stringify(plan)); }, [plan]);
 
-  const [syncing, setSyncing] = useState(false);
-
   async function loadMain() {
     const m = await api.me();
     setMe(m);
     setStage('main');
     if (!m.demo) {
       api.profile().then(setProfile).catch(console.error);
-    }
-  }
-
-  async function handleSyncSdu() {
-    setSyncing(true);
-    setError(null);
-    try {
-      const m = await api.me(true);
-      setMe(m);
-      const c = await api.curriculum();
-      setCurriculum(c);
-    } catch (e) {
-      if (!authFail(e)) setError('Ошибка синхронизации: ' + e.message);
-    } finally {
-      setSyncing(false);
     }
   }
 
@@ -241,18 +224,7 @@ export default function App() {
           {me.user?.name && <span>{me.user.name} · {me.user.program}</span>}
           {me.demo && <span className="demo-badge">demo data</span>}
         </span>
-        <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          {!me.demo && (
-            <button
-              className="btn btn-ghost"
-              disabled={syncing}
-              onClick={handleSyncSdu}
-              title="Синхронизировать данные с портала SDU"
-              style={{ fontSize: '0.85rem' }}
-            >
-              {syncing ? '⟳ Синхронизация…' : '⟳ Обновить с SDU'}
-            </button>
-          )}
+        <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {profile?.role === 'Administrator' && (
             <button className="btn" onClick={() => { setView('admin'); window.scrollTo(0,0); }}>
               Admin Panel

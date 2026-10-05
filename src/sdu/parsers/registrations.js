@@ -11,9 +11,21 @@
 import * as cheerio from 'cheerio';
 
 export function parseCourseRegPage(html) {
-  if (/name="password"/.test(html)) return { authenticated: false };
+  if (!html || typeof html !== 'string' || html.trim().length === 0) {
+    return { authenticated: false };
+  }
+  if (/name="password"|loginAuth\.php|verification\.php|<title>\s*Login/i.test(html)) {
+    return { authenticated: false };
+  }
 
   const $ = cheerio.load(html);
+
+  const hasModTitle = $('.modTitle').length > 0;
+  const hasTrack = $('#selectTrack').length > 0;
+  const hasTable = $('table.clsTbl').length > 0;
+  if (!hasModTitle && !hasTrack && !hasTable) {
+    return { authenticated: false };
+  }
 
   let term = null;
   for (const el of $('.modTitle')) {

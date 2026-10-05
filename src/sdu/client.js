@@ -188,6 +188,8 @@ export class SduClient {
       this.status = 'pending_2fa';
       return { ok: true, needs2fa: true };
     }
+    // Переход на index.php после успешного логина для инициализации сессии портала
+    await this.#req('GET', r.location || '/index.php', { referer: `${BASE}/loginAuth.php` });
     this.status = 'authed';
     return { ok: true, needs2fa: false };
   }
@@ -200,6 +202,7 @@ export class SduClient {
     });
     if (r.status !== 302) return { ok: false, reason: 'bad_code' };
     await this.#req('GET', r.location || '/loginAuth.php?verified=1');
+    await this.#req('GET', '/index.php', { referer: `${BASE}/loginAuth.php` });
     this.status = 'authed';
     return { ok: true };
   }
@@ -248,6 +251,10 @@ export class SduClient {
   /** Страница Course Registration: term, трек, утверждённые/корзина. */
   async getCourseReg() {
     const r = await this.#req('GET', '/index.php?mod=course_reg', { referer: `${BASE}/index.php` });
+    if (r.status === 302 || /loginAuth\.php|verification\.php/i.test(r.location || '')) {
+      this.status = 'anonymous';
+      return { authenticated: false };
+    }
     return parseCourseRegPage(r.text);
   }
 

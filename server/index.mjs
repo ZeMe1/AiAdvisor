@@ -232,10 +232,28 @@ app.post('/api/auth/logout', asyncHandler(async (req, res) => {
 
 // ------------------------------------------------- Получение данных с кэшированием
 async function getCurriculum(client) {
-  const me = await client.getCourseReg();
-  if (me.authenticated === false) throw sessionExpiredError();
-  const trackId = me.track?.id;
-  if (!trackId) throw new HttpError(502, 'не нашли id трека на странице course_reg');
+  // 1. Сначала проверяем кэш студента в БД — там уже сохранён trackId!
+  const studentData = await getCachedStudentData(client.localUsername);
+  let trackId = studentData?.track?.id;
+
+  if (trackId) {
+    const cached = await getCachedCurriculum(trackId);
+    if (cached) return cached.curriculum;
+  }
+
+  // 2. Если trackId ещё нет в БД, запрашиваем страницу регистраций
+  if (!trackId) {
+    const me = await client.getCourseReg();
+    if (me.authenticated === false) throw sessionExpiredError();
+    trackId = me.track?.id;
+  }
+
+  if (!trackId) {
+    // Фолбэк на любой доступный куррикулум из БД
+    const { rows } = await pool.query('SELECT curriculum FROM curriculum_cache LIMIT 1');
+    if (rows.length > 0) return rows[0].curriculum;
+    throw new HttpError(502, 'не нашли id трека на странице course_reg');
+  }
 
   const cached = await getCachedCurriculum(trackId);
   if (cached) return cached.curriculum;
@@ -249,8 +267,20 @@ async function getCurriculum(client) {
 }
 
 async function getMe(client) {
-  const me = await client.getCourseReg();
-  if (me.authenticated === false) throw sessionExpiredError();
+  let me;
+  try {
+    me = await client.getCourseReg();
+  } catch (err) {
+    const cached = await getCachedStudentData(client.localUsername);
+    if (cached) return cached;
+    throw err;
+  }
+
+  if (me.authenticated === false) {
+    const cached = await getCachedStudentData(client.localUsername);
+    if (cached) return cached;
+    throw sessionExpiredError();
+  }
 
   const trackId = me.track?.id;
   let curriculum = null;
