@@ -32,6 +32,13 @@ import {
   getStaleCachedSections,
   setCachedSections
 } from './cache.mjs';
+import {
+  getVariants,
+  createVariant,
+  updateVariant,
+  setActiveVariant,
+  deleteVariant
+} from './variants.mjs';
 
 // Инициализация таблиц БД на старте
 initDb().catch(console.error);
@@ -524,6 +531,43 @@ app.post('/api/electives', asyncHandler(async (req, res) => {
     type: type ?? 'NAE',
     fallbackCodes: candidates,
   }));
+}));
+
+// ------------------------------------------------- Варианты расписания (Schedule Variants)
+app.get('/api/schedule/variants', asyncHandler(async (req, res) => {
+  const client = requireAuth(req);
+  const variants = await getVariants(client.userId);
+  res.json({ variants, activeVariantId: variants.find((v) => v.is_active)?.id ?? variants[0]?.id });
+}));
+
+app.post('/api/schedule/variants', asyncHandler(async (req, res) => {
+  const client = requireAuth(req);
+  const { name, schedule = [] } = req.body ?? {};
+  if (!name || !String(name).trim()) throw new HttpError(400, 'укажите название варианта');
+  const variant = await createVariant(client.userId, name, schedule, false);
+  res.json(variant);
+}));
+
+app.put('/api/schedule/variants/:id', asyncHandler(async (req, res) => {
+  const client = requireAuth(req);
+  const { name, schedule } = req.body ?? {};
+  const updated = await updateVariant(client.userId, req.params.id, { name, schedule });
+  if (!updated) throw new HttpError(404, 'Вариант не найден');
+  res.json(updated);
+}));
+
+app.put('/api/schedule/variants/:id/active', asyncHandler(async (req, res) => {
+  const client = requireAuth(req);
+  const active = await setActiveVariant(client.userId, req.params.id);
+  if (!active) throw new HttpError(404, 'Вариант не найден');
+  res.json(active);
+}));
+
+app.delete('/api/schedule/variants/:id', asyncHandler(async (req, res) => {
+  const client = requireAuth(req);
+  const ok = await deleteVariant(client.userId, req.params.id);
+  if (!ok) throw new HttpError(404, 'Вариант не найден');
+  res.json({ ok: true });
 }));
 
 // ------------------------------------------------- Профиль пользователя

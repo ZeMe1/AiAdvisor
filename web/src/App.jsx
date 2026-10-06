@@ -10,6 +10,7 @@ import ElectivesPage from './components/ElectivesPage.jsx';
 import ProfilePage from './components/ProfilePage.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import SduReconnectModal from './components/SduReconnectModal.jsx';
+import ScheduleVariantsPanel from './components/ScheduleVariantsPanel.jsx';
 
 const PLAN_KEY = 'zeme_plan_v1';
 const loadPlan = () => {
@@ -38,6 +39,9 @@ export default function App() {
   const [loginNotice, setLoginNotice] = useState(null);
   const [sduReconnectOpen, setSduReconnectOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
+  const [variants, setVariants] = useState([]);
+  const [activeVariantId, setActiveVariantId] = useState(null);
+  const [variantSaving, setVariantSaving] = useState(false);
 
   useEffect(() => {
     api.me().then((m) => { 
@@ -55,7 +59,86 @@ export default function App() {
     });
   }, [stage]);
 
-  useEffect(() => { localStorage.setItem(PLAN_KEY, JSON.stringify(plan)); }, [plan]);
+  // Загрузка вариантов расписания из PostgreSQL
+  useEffect(() => {
+    if (stage !== 'main' || me?.demo) return;
+    api.getVariants().then(({ variants: vars, activeVariantId: activeId }) => {
+      if (vars && vars.length > 0) {
+        setVariants(vars);
+        setActiveVariantId(activeId);
+        const activeVar = vars.find(v => v.id === activeId) || vars[0];
+        if (activeVar?.schedule && Array.isArray(activeVar.schedule) && activeVar.schedule.length > 0) {
+          setPlan(activeVar.schedule);
+        } else {
+          const local = loadPlan();
+          if (local.length > 0) {
+            setPlan(local);
+            api.updateVariant(activeVar.id, { schedule: local }).catch(console.error);
+          }
+        }
+      }
+    }).catch(console.error);
+  }, [stage, me?.demo]);
+
+  // Автоматическая синхронизация плана в активный вариант базы данных
+  useEffect(() => {
+    localStorage.setItem(PLAN_KEY, JSON.stringify(plan));
+    if (!activeVariantId || me?.demo) return;
+    const timer = setTimeout(async () => {
+      try {
+        setVariantSaving(true);
+        await api.updateVariant(activeVariantId, { schedule: plan });
+        setVariants(prev => prev.map(v => v.id === activeVariantId ? { ...v, schedule: plan } : v));
+      } catch (err) {
+        console.error('Failed to sync variant:', err);
+      } finally {
+        setVariantSaving(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [plan, activeVariantId, me?.demo]);
+
+  async function handleSelectVariant(id) {
+    setActiveVariantId(id);
+    const target = variants.find(v => v.id === id);
+    if (target) {
+      setPlan(target.schedule || []);
+    }
+    await api.setActiveVariant(id).catch(console.error);
+  }
+
+  async function handleCreateVariant(name) {
+    try {
+      const newVar = await api.createVariant(name, plan);
+      setVariants(prev => [...prev, newVar]);
+      setActiveVariantId(newVar.id);
+    } catch (err) {
+      setError('Ошибка создания варианта: ' + err.message);
+    }
+  }
+
+  async function handleRenameVariant(id, name) {
+    try {
+      await api.updateVariant(id, { name });
+      setVariants(prev => prev.map(v => v.id === id ? { ...v, name } : v));
+    } catch (err) {
+      setError('Ошибка переименования: ' + err.message);
+    }
+  }
+
+  async function handleDeleteVariant(id) {
+    try {
+      await api.deleteVariant(id);
+      const remaining = variants.filter(v => v.id !== id);
+      setVariants(remaining);
+      if (activeVariantId === id && remaining.length > 0) {
+        setActiveVariantId(remaining[0].id);
+        setPlan(remaining[0].schedule || []);
+      }
+    } catch (err) {
+      setError('Ошибка удаления варианта: ' + err.message);
+    }
+  }
 
   async function loadMain() {
     const m = await api.me();
@@ -325,7 +408,16 @@ export default function App() {
           <Basket me={me} />
 
           <section className="card">
-            <h2>📝 Мой план <span className="muted small">(хранится локально, в SDU не отправляется)</span></h2>
+            <h2>📝 Мой план <span className="muted small">(сохраняется в облаке, в SDU не отправляется)</span></h2>
+            <ScheduleVariantsPanel
+              variants={variants}
+              activeVariantId={activeVariantId}
+              onSelectVariant={handleSelectVariant}
+              onCreateVariant={handleCreateVariant}
+              onRenameVariant={handleRenameVariant}
+              onDeleteVariant={handleDeleteVariant}
+              saving={variantSaving}
+            />
             {plan.length === 0 && <p className="muted">Пусто — выберите секции курса через Choose или поиск.</p>}
             {plan.map((p) => (
               <div className="plan-row" key={p.code}>

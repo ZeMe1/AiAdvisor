@@ -77,6 +77,17 @@ export async function initDb() {
       data JSONB NOT NULL,
       cached_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS schedule_variants (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name VARCHAR(100) NOT NULL,
+      schedule JSONB NOT NULL DEFAULT '[]'::jsonb,
+      is_active BOOLEAN DEFAULT false,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_schedule_variants_user ON schedule_variants(user_id);
   `);
   console.log('Database initialized with sessions & caching tables.');
 }
