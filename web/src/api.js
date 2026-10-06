@@ -1,4 +1,22 @@
-async function j(url, opts = {}) {
+let refreshPromise = null;
+
+async function doRefresh() {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const res = await fetch('/api/auth/refresh', { method: 'POST' });
+        return res.ok;
+      } catch {
+        return false;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+  return refreshPromise;
+}
+
+async function j(url, opts = {}, isRetry = false) {
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
@@ -10,6 +28,22 @@ async function j(url, opts = {}) {
   } catch {
     data = { error: res.statusText };
   }
+
+  // Бесшовное автопродление сессии (Silent Refresh) при 401
+  if (
+    res.status === 401 &&
+    !isRetry &&
+    !url.includes('/api/auth/login') &&
+    !url.includes('/api/auth/refresh') &&
+    !data.sduSessionExpired
+  ) {
+    const refreshed = await doRefresh();
+    if (refreshed) {
+      // Прозрачно повторяем упавший запрос с новой сессией
+      return j(url, opts, true);
+    }
+  }
+
   if (!res.ok) {
     const err = new Error(data.error || res.statusText);
     err.status = res.status;
@@ -26,6 +60,7 @@ const post = (url, body) => ({ method: 'POST', body: JSON.stringify(body) });
 export const api = {
   login: (username, password) => j('/api/auth/login', post('/api/auth/login', { username, password })),
   twoFa: (code) => j('/api/auth/2fa', post('/api/auth/2fa', { code })),
+  refresh: () => j('/api/auth/refresh', { method: 'POST' }),
   logout: () => j('/api/auth/logout', { method: 'POST' }),
   sduReconnect: (password) => j('/api/auth/sdu-reconnect', post('/api/auth/sdu-reconnect', { password })),
   sduReconnect2fa: (code) => j('/api/auth/sdu-reconnect-2fa', post('/api/auth/sdu-reconnect-2fa', { code })),

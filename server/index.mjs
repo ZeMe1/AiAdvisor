@@ -221,6 +221,23 @@ app.post('/api/auth/2fa', asyncHandler(async (req, res) => {
   res.json({ status: 'ok' });
 }));
 
+app.post('/api/auth/refresh', asyncHandler(async (req, res) => {
+  const sessionId = parseCookies(req)[COOKIE];
+  if (!sessionId) throw new HttpError(401, 'Нет сессии для обновления');
+
+  const session = await getSession(sessionId);
+  if (!session) throw new HttpError(401, 'Сессия не найдена или истекла');
+
+  // Продлеваем сессию на 7 дней в БД (Sliding Expiration)
+  await pool.query(
+    `UPDATE sessions SET expires_at = NOW() + INTERVAL '7 days', updated_at = NOW() WHERE id = $1`,
+    [sessionId]
+  );
+
+  setSessionCookie(res, sessionId);
+  res.json({ ok: true, status: 'ok' });
+}));
+
 app.post('/api/auth/logout', asyncHandler(async (req, res) => {
   if (req.client) {
     await req.client.logout().catch(() => {});
