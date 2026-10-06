@@ -230,15 +230,29 @@ export class SduClient {
       xhr: true,
       referer: `${BASE}/index.php?mod=course_reg`,
     });
+    // 1. Проверяем HTTP-редирект на страницу логина
+    if (r.status === 302 || /loginAuth\.php|verification\.php/i.test(r.location || '')) {
+      this.status = 'anonymous';
+      const e = new Error('Сессия портала истекла — войдите заново');
+      e.sessionExpired = true;
+      throw e;
+    }
+
     if (r.status !== 200) throw new Error(`SDU ajx ${action}: HTTP ${r.status}`);
+
     let json;
     try {
       json = JSON.parse(r.text);
     } catch {
-      // умершая сессия: портал отдаёт страницу логина вместо JSON-конверта
-      if (/name="password"|loginAuth\.php/i.test(r.text)) {
+      // 2. Проверяем маркеры истекшей сессии:
+      // - внутренний маркер SDU для неавторизованных AJAX-запросов: #!3%6$#@458...
+      // - редирект или HTML-форма логина
+      if (
+        r.text.includes('#!3%6$#@458') ||
+        /name="password"|loginAuth\.php|verification\.php|<title>\s*Login/i.test(r.text)
+      ) {
         this.status = 'anonymous';
-        const e = new Error('Сессия портала истекла');
+        const e = new Error('Сессия портала истекла — войдите заново');
         e.sessionExpired = true;
         throw e;
       }

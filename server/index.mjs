@@ -400,7 +400,18 @@ app.get('/api/sections', asyncHandler(async (req, res) => {
   const curriculum = await getCurriculum(client);
   const found = curriculum.semesters.flatMap((s) => s.courses).find((c) => c.code.toUpperCase() === code.toUpperCase());
   const params = found?.sectionsParams;
-  if (!params) throw new HttpError(502, `не знаем параметры программы для ${code}`);
+  if (!params) {
+    const studentData = await getCachedStudentData(client.localUsername);
+    const progTrack = studentData?.progTrack ?? 'TRACK0';
+    try {
+      const searchData = await client.searchCourse(code, progTrack);
+      await setCachedSections(cacheKey, searchData).catch(console.error);
+      return res.json(searchData);
+    } catch (searchErr) {
+      if (searchErr.sessionExpired) throw searchErr;
+      throw new HttpError(404, `Курс ${code} не найден в куррикулуме и на портале`);
+    }
+  }
 
   const sectionsData = await client.getSections({ ...params, dk: code, mufSqId });
   await setCachedSections(cacheKey, sectionsData).catch(console.error);
