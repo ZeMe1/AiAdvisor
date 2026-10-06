@@ -9,6 +9,7 @@ import CoursePage from './components/CoursePage.jsx';
 import ElectivesPage from './components/ElectivesPage.jsx';
 import ProfilePage from './components/ProfilePage.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
+import SduReconnectModal from './components/SduReconnectModal.jsx';
 
 const PLAN_KEY = 'zeme_plan_v1';
 const loadPlan = () => {
@@ -35,6 +36,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [loginNotice, setLoginNotice] = useState(null);
+  const [sduReconnectOpen, setSduReconnectOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
 
   useEffect(() => {
     api.me().then((m) => { 
@@ -94,19 +97,31 @@ export default function App() {
       setView('course');
       window.scrollTo(0, 0);
     } catch (e) {
-      if (authFail(e)) return;
+      if (authFail(e, () => openCourse(code, mufSqId))) return;
       setError(e.message);
     } finally {
       setBusy(false);
     }
   }
 
-  /** 401 от нашего API — сессия портала истекла, отправляем на логин. */
-  function authFail(e) {
-    if (e?.status !== 401 && !e?.sessionExpired) return false;
-    setStage('login');
-    setLoginNotice('Сессия портала истекла — войдите заново');
-    return true;
+  /**
+   * Раздельная обработка ошибок авторизации:
+   * 1. e.sduSessionExpired: сессия SDU протухла, НО пользователь остаётся в ZeMe.
+   *    Показываем компактную модалку переподключения без вылета и без потери плана!
+   * 2. e.status === 401: сессия ZeMe не существует — отправляем на форму логина.
+   */
+  function authFail(e, retryFn) {
+    if (e?.sduSessionExpired) {
+      if (retryFn) setPendingAction(() => retryFn);
+      setSduReconnectOpen(true);
+      return true;
+    }
+    if (e?.status === 401 && !e?.zemeAuthenticated) {
+      setStage('login');
+      setLoginNotice('Сессия истекла — войдите заново');
+      return true;
+    }
+    return false;
   }
 
   function backToHome() {
@@ -336,6 +351,23 @@ export default function App() {
             : <section className="card"><p className="muted">Куррикулум загружается…</p></section>}
         </main>
       )}
+
+      <SduReconnectModal
+        isOpen={sduReconnectOpen}
+        username={profile?.username || me?.user?.username}
+        onClose={() => {
+          setSduReconnectOpen(false);
+          setPendingAction(null);
+        }}
+        onSuccess={() => {
+          setSduReconnectOpen(false);
+          if (pendingAction) {
+            const fn = pendingAction;
+            setPendingAction(null);
+            fn();
+          }
+        }}
+      />
     </div>
   );
 }

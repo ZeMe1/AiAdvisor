@@ -19,7 +19,8 @@ import {
   createSession,
   getSession,
   updateSession,
-  deleteSession
+  deleteSession,
+  setSduActive
 } from './session.mjs';
 import {
   getCachedStudentData,
@@ -28,6 +29,7 @@ import {
   getCachedCurriculum,
   setCachedCurriculum,
   getCachedSections,
+  getStaleCachedSections,
   setCachedSections
 } from './cache.mjs';
 
@@ -230,6 +232,40 @@ app.post('/api/auth/logout', asyncHandler(async (req, res) => {
   res.json({ status: 'ok' });
 }));
 
+app.post('/api/auth/sdu-reconnect', asyncHandler(async (req, res) => {
+  const client = requireAuth(req);
+  const { password } = req.body ?? {};
+  if (!password) throw new HttpError(400, 'укажите password');
+
+  const freshClient = new SduClient();
+  const r = await freshClient.login(client.localUsername, password);
+  if (r.needs2fa) {
+    await updateSession(req.sessionId, { sduJar: freshClient.jarAsObject() });
+    return res.json({ status: '2fa_required' });
+  }
+
+  await updateSession(req.sessionId, {
+    sduActive: true,
+    sduJar: freshClient.jarAsObject(),
+  });
+  res.json({ status: 'ok' });
+}));
+
+app.post('/api/auth/sdu-reconnect-2fa', asyncHandler(async (req, res) => {
+  const client = requireAuth(req);
+  const { code } = req.body ?? {};
+  if (!code) throw new HttpError(400, 'укажите code');
+
+  const r = await client.submit2fa(code);
+  if (!r.ok) throw new HttpError(401, 'Неверный 2FA код');
+
+  await updateSession(req.sessionId, {
+    sduActive: true,
+    sduJar: client.jarAsObject(),
+  });
+  res.json({ status: 'ok' });
+}));
+
 // ------------------------------------------------- Получение данных с кэшированием
 async function getCurriculum(client) {
   // 1. Сначала проверяем кэш студента в БД — там уже сохранён trackId!
@@ -351,19 +387,20 @@ app.get('/api/me', asyncHandler(async (req, res) => {
   if (DEMO) return res.json(demo.me());
   const client = requireAuth(req);
   const forceRefresh = req.query.refresh === '1';
+  const sduActive = req.session?.sdu_active !== false;
 
   // 1. Проверяем кэш в БД
   if (!forceRefresh) {
     const cached = await getCachedStudentData(client.localUsername);
     if (cached) {
-      return res.json(cached);
+      return res.json({ ...cached, sduActive });
     }
   }
 
   // 2. Запрашиваем свежие данные с портала SDU
   const data = await getMe(client);
   await setCachedStudentData(client.localUsername, data).catch(console.error);
-  res.json(data);
+  res.json({ ...data, sduActive });
 }));
 
 app.get('/api/curriculum', asyncHandler(async (req, res) => {
@@ -393,29 +430,36 @@ app.get('/api/sections', asyncHandler(async (req, res) => {
   const mufSqId = req.query.mufSqId ? String(req.query.mufSqId) : undefined;
   const cacheKey = `${code.toUpperCase()}:${mufSqId || 'norm'}`;
 
-  // Проверяем кэш секций
+  // 1. Проверяем свежий кэш секций в БД (отдаётся мгновенно за 5-10 мс)
   const cached = await getCachedSections(cacheKey);
   if (cached) return res.json(cached);
 
-  const curriculum = await getCurriculum(client);
-  const found = curriculum.semesters.flatMap((s) => s.courses).find((c) => c.code.toUpperCase() === code.toUpperCase());
-  const params = found?.sectionsParams;
-  if (!params) {
-    const studentData = await getCachedStudentData(client.localUsername);
-    const progTrack = studentData?.progTrack ?? 'TRACK0';
-    try {
+  // 2. Если в кэше нет — пробуем загрузить с портала SDU
+  try {
+    const curriculum = await getCurriculum(client);
+    const found = curriculum.semesters.flatMap((s) => s.courses).find((c) => c.code.toUpperCase() === code.toUpperCase());
+    const params = found?.sectionsParams;
+    if (!params) {
+      const studentData = await getCachedStudentData(client.localUsername);
+      const progTrack = studentData?.progTrack ?? 'TRACK0';
       const searchData = await client.searchCourse(code, progTrack);
       await setCachedSections(cacheKey, searchData).catch(console.error);
       return res.json(searchData);
-    } catch (searchErr) {
-      if (searchErr.sessionExpired) throw searchErr;
-      throw new HttpError(404, `Курс ${code} не найден в куррикулуме и на портале`);
     }
-  }
 
-  const sectionsData = await client.getSections({ ...params, dk: code, mufSqId });
-  await setCachedSections(cacheKey, sectionsData).catch(console.error);
-  res.json(sectionsData);
+    const sectionsData = await client.getSections({ ...params, dk: code, mufSqId });
+    await setCachedSections(cacheKey, sectionsData).catch(console.error);
+    return res.json(sectionsData);
+  } catch (err) {
+    // 3. Fallback: если портал SDU вернул ошибку/сессия умерла,
+    // но в нашей базе ЕСТЬ сохранённые секции этого курса — отдаём их!
+    const staleData = await getStaleCachedSections(cacheKey);
+    if (staleData) {
+      return res.json({ ...staleData, _stale: true });
+    }
+    // Если секций в базе нет вообще — пробрасываем ошибку для обработки
+    throw err;
+  }
 }));
 
 app.get('/api/search', asyncHandler(async (req, res) => {
@@ -533,22 +577,23 @@ app.use((req, res, next) => {
 
 // ------------------------------------------------- Централизованный обработчик ошибок
 app.use(async (err, req, res, _next) => {
-  const isSessionExpired = err.sessionExpired === true;
-  if (isSessionExpired) {
+  const isSduSessionExpired = err.sessionExpired === true;
+  if (isSduSessionExpired) {
     if (req.sessionId) {
-      await deleteSession(req.sessionId).catch(() => {});
+      // ПОМЕЧАЕМ sdu_active = false в БД, НО НЕ УДАЛЯЕМ сессию ZeMe!
+      await setSduActive(req.sessionId, false).catch(() => {});
     }
-    clearSessionCookie(res);
+    // Пользователь остаётся авторизованным в ZeMe!
   }
 
-  const status = isSessionExpired ? 401 : (err instanceof HttpError ? err.status : (err.status || 500));
+  const status = isSduSessionExpired ? 401 : (err instanceof HttpError ? err.status : (err.status || 500));
   if (status >= 500) {
     console.error(`[api error] ${req.method} ${req.path}:`, err.message || err);
   }
 
   res.status(status).json({
     error: err.message || 'internal error',
-    ...(isSessionExpired ? { sessionExpired: true } : {})
+    ...(isSduSessionExpired ? { sduSessionExpired: true, zemeAuthenticated: !!req.session } : {})
   });
 });
 

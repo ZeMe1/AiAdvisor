@@ -9,7 +9,7 @@ import { pool } from './db.mjs';
 // TTL definitions
 export const STUDENT_CACHE_TTL_MS = 20 * 60 * 1000;   // 20 minutes for registrations / basket
 export const CURRICULUM_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours for curriculum (rarely changes)
-export const SECTIONS_CACHE_TTL_MS = 15 * 60 * 1000;   // 15 minutes for section quotas & schedules
+export const SECTIONS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;   // 6 часов для квот и расписания секций
 
 /** ----------------- Student Data Cache (/api/me) ----------------- */
 export async function getCachedStudentData(username, maxAgeMs = STUDENT_CACHE_TTL_MS) {
@@ -119,6 +119,19 @@ export async function getCachedSections(cacheKey, maxAgeMs = SECTIONS_CACHE_TTL_
   if (age > maxAgeMs) return null;
 
   return row.data;
+}
+
+/** Получить закэшированные секции независимо от срока давности (stale fallback при сбоях SDU) */
+export async function getStaleCachedSections(cacheKey) {
+  if (!cacheKey) return null;
+  const { rows } = await pool.query(
+    `SELECT data
+     FROM course_sections_cache
+     WHERE cache_key = $1`,
+    [cacheKey]
+  );
+  if (rows.length === 0) return null;
+  return rows[0].data;
 }
 
 export async function setCachedSections(cacheKey, data) {

@@ -44,11 +44,13 @@ export async function initDb() {
       username VARCHAR(255) NOT NULL,
       role VARCHAR(50) NOT NULL,
       status VARCHAR(50) NOT NULL,
+      sdu_active BOOLEAN DEFAULT true,
       sdu_jar JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '7 days')
     );
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS sdu_active BOOLEAN DEFAULT true;
     CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 

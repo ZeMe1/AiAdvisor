@@ -10,14 +10,14 @@ import { pool } from './db.mjs';
  * - Deterministic logout (deletes session from DB).
  */
 
-export async function createSession({ userId, username, role, status = 'authed', sduJar = {} }) {
+export async function createSession({ userId, username, role, status = 'authed', sduActive = true, sduJar = {} }) {
   const sessionId = crypto.randomBytes(32).toString('hex');
   const jarJson = JSON.stringify(sduJar);
   
   await pool.query(
-    `INSERT INTO sessions (id, user_id, username, role, status, sdu_jar, created_at, updated_at, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW(), NOW() + INTERVAL '7 days')`,
-    [sessionId, userId, username, role, status, jarJson]
+    `INSERT INTO sessions (id, user_id, username, role, status, sdu_active, sdu_jar, created_at, updated_at, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW(), NOW(), NOW() + INTERVAL '7 days')`,
+    [sessionId, userId, username, role, status, sduActive, jarJson]
   );
 
   return sessionId;
@@ -27,7 +27,7 @@ export async function getSession(sessionId) {
   if (!sessionId || typeof sessionId !== 'string') return null;
 
   const { rows } = await pool.query(
-    `SELECT id, user_id, username, role, status, sdu_jar, expires_at
+    `SELECT id, user_id, username, role, status, sdu_active, sdu_jar, expires_at
      FROM sessions
      WHERE id = $1 AND expires_at > NOW()`,
     [sessionId]
@@ -37,7 +37,7 @@ export async function getSession(sessionId) {
   return rows[0];
 }
 
-export async function updateSession(sessionId, { status, sduJar }) {
+export async function updateSession(sessionId, { status, sduActive, sduJar }) {
   if (!sessionId) return;
   const updates = [];
   const params = [sessionId];
@@ -46,6 +46,10 @@ export async function updateSession(sessionId, { status, sduJar }) {
   if (status !== undefined) {
     updates.push(`status = $${idx++}`);
     params.push(status);
+  }
+  if (sduActive !== undefined) {
+    updates.push(`sdu_active = $${idx++}`);
+    params.push(Boolean(sduActive));
   }
   if (sduJar !== undefined) {
     updates.push(`sdu_jar = $${idx++}::jsonb`);
@@ -60,6 +64,10 @@ export async function updateSession(sessionId, { status, sduJar }) {
       params
     );
   }
+}
+
+export async function setSduActive(sessionId, active) {
+  return updateSession(sessionId, { sduActive: active });
 }
 
 export async function deleteSession(sessionId) {

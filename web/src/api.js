@@ -14,6 +14,8 @@ async function j(url, opts = {}) {
     const err = new Error(data.error || res.statusText);
     err.status = res.status;
     err.sessionExpired = data.sessionExpired;
+    err.sduSessionExpired = data.sduSessionExpired;
+    err.zemeAuthenticated = data.zemeAuthenticated;
     throw err;
   }
   return data;
@@ -25,6 +27,8 @@ export const api = {
   login: (username, password) => j('/api/auth/login', post('/api/auth/login', { username, password })),
   twoFa: (code) => j('/api/auth/2fa', post('/api/auth/2fa', { code })),
   logout: () => j('/api/auth/logout', { method: 'POST' }),
+  sduReconnect: (password) => j('/api/auth/sdu-reconnect', post('/api/auth/sdu-reconnect', { password })),
+  sduReconnect2fa: (code) => j('/api/auth/sdu-reconnect-2fa', post('/api/auth/sdu-reconnect-2fa', { code })),
   me: (refresh = false) => j(`/api/me${refresh ? '?refresh=1' : ''}`),
   curriculum: () => j('/api/curriculum'),
   sections: (code, mufSqId) =>
