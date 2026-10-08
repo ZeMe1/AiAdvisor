@@ -37,6 +37,22 @@ export async function getSession(sessionId) {
   return rows[0];
 }
 
+export async function refreshSession(sessionId, gracePeriodDays = 14) {
+  if (!sessionId || typeof sessionId !== 'string') return null;
+
+  // Продлеваем сессию на 7 дней, если она активна или истекла недавно (в пределах grace period)
+  const { rows } = await pool.query(
+    `UPDATE sessions
+     SET expires_at = NOW() + INTERVAL '7 days',
+         updated_at = NOW()
+     WHERE id = $1 AND expires_at > (NOW() - ($2 || ' days')::interval)
+     RETURNING id, user_id, username, role, status, sdu_active, expires_at`,
+    [sessionId, String(gracePeriodDays)]
+  );
+
+  return rows[0] || null;
+}
+
 export async function updateSession(sessionId, { status, sduActive, sduJar }) {
   if (!sessionId) return;
   const updates = [];

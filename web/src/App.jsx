@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
 import { slotIndexOf, markConflicts } from './schedule.js';
 import Login from './components/Login.jsx';
@@ -42,13 +42,27 @@ export default function App() {
   const [variants, setVariants] = useState([]);
   const [activeVariantId, setActiveVariantId] = useState(null);
   const [variantSaving, setVariantSaving] = useState(false);
+  const saveTimerRef = useRef(null);
+  const activeVariantIdRef = useRef(null);
+  const planRef = useRef(plan);
+
+  useEffect(() => {
+    activeVariantIdRef.current = activeVariantId;
+  }, [activeVariantId]);
+
+  useEffect(() => {
+    planRef.current = plan;
+  }, [plan]);
 
   useEffect(() => {
     api.me().then((m) => { 
       setMe(m); 
       setStage('main'); 
       if (!m.demo) api.profile().then(setProfile).catch(console.error);
-    }).catch(() => setStage('login'));
+    }).catch((e) => {
+      if (authFail(e)) return;
+      setStage('login');
+    });
   }, []);
 
   useEffect(() => {
@@ -61,57 +75,104 @@ export default function App() {
 
   // Загрузка вариантов расписания из PostgreSQL
   useEffect(() => {
-    if (stage !== 'main' || me?.demo) return;
+    if (stage !== 'main') return;
     api.getVariants().then(({ variants: vars, activeVariantId: activeId }) => {
       if (vars && vars.length > 0) {
         setVariants(vars);
-        setActiveVariantId(activeId);
-        const activeVar = vars.find(v => v.id === activeId) || vars[0];
-        if (activeVar?.schedule && Array.isArray(activeVar.schedule) && activeVar.schedule.length > 0) {
-          setPlan(activeVar.schedule);
-        } else {
-          const local = loadPlan();
-          if (local.length > 0) {
-            setPlan(local);
-            api.updateVariant(activeVar.id, { schedule: local }).catch(console.error);
+        const activeVar = vars.find((v) => v.id === activeId) || vars[0];
+        setActiveVariantId(activeVar.id);
+
+        if (Array.isArray(activeVar.schedule)) {
+          // Однократная миграция из localStorage только если в БД 1 пустой вариант и есть локальные данные
+          if (activeVar.schedule.length === 0 && vars.length === 1) {
+            const local = loadPlan();
+            if (local.length > 0) {
+              setPlan(local);
+              localStorage.setItem(PLAN_KEY, JSON.stringify(local));
+              api.updateVariant(activeVar.id, { schedule: local }).catch(console.error);
+              return;
+            }
           }
+          setPlan(activeVar.schedule);
+          localStorage.setItem(PLAN_KEY, JSON.stringify(activeVar.schedule));
         }
       }
     }).catch(console.error);
-  }, [stage, me?.demo]);
+  }, [stage]);
 
-  // Автоматическая синхронизация плана в активный вариант базы данных
-  useEffect(() => {
-    localStorage.setItem(PLAN_KEY, JSON.stringify(plan));
-    if (!activeVariantId || me?.demo) return;
-    const timer = setTimeout(async () => {
-      try {
+  // Централизованное обновление плана с мгновенной синхронизацией стейта и debounced-сохранением
+  function updatePlan(updater) {
+    setPlan((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      localStorage.setItem(PLAN_KEY, JSON.stringify(next));
+
+      const curId = activeVariantIdRef.current;
+      if (curId) {
+        // Мгновенно обновляем стейт вариантов, исключая рассинхрон при переключении
+        setVariants((all) => all.map((v) => (v.id === curId ? { ...v, schedule: next } : v)));
+
+        // Отложенное сохранение на сервер
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         setVariantSaving(true);
-        await api.updateVariant(activeVariantId, { schedule: plan });
-        setVariants(prev => prev.map(v => v.id === activeVariantId ? { ...v, schedule: plan } : v));
-      } catch (err) {
-        console.error('Failed to sync variant:', err);
-      } finally {
-        setVariantSaving(false);
+        saveTimerRef.current = setTimeout(async () => {
+          try {
+            await api.updateVariant(curId, { schedule: next });
+          } catch (err) {
+            console.error('Failed to sync variant:', err);
+          } finally {
+            setVariantSaving(false);
+            saveTimerRef.current = null;
+          }
+        }, 400);
       }
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [plan, activeVariantId, me?.demo]);
+      return next;
+    });
+  }
 
   async function handleSelectVariant(id) {
-    setActiveVariantId(id);
-    const target = variants.find(v => v.id === id);
-    if (target) {
-      setPlan(target.schedule || []);
+    if (id === activeVariantId) return;
+
+    // Flush: немедленно сохраняем незавершённые изменения предыдущего варианта
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      if (activeVariantId) {
+        api.updateVariant(activeVariantId, { schedule: planRef.current }).catch(console.error);
+      }
+      setVariantSaving(false);
     }
+
+    const target = variants.find((v) => v.id === id);
+    const targetSchedule = target?.schedule || [];
+
+    setActiveVariantId(id);
+    setPlan(targetSchedule);
+    localStorage.setItem(PLAN_KEY, JSON.stringify(targetSchedule));
+    setVariants((all) => all.map((v) => ({ ...v, is_active: v.id === id })));
+
     await api.setActiveVariant(id).catch(console.error);
   }
 
   async function handleCreateVariant(name) {
     try {
-      const newVar = await api.createVariant(name, plan);
-      setVariants(prev => [...prev, newVar]);
+      // Сбрасываем незавершённое сохранение текущего варианта
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        if (activeVariantId) {
+          await api.updateVariant(activeVariantId, { schedule: planRef.current }).catch(console.error);
+        }
+        setVariantSaving(false);
+      }
+
+      const newVar = await api.createVariant(name, planRef.current, true);
+      setVariants((prev) => [
+        ...prev.map((v) => ({ ...v, is_active: false })),
+        newVar,
+      ]);
       setActiveVariantId(newVar.id);
+      setPlan(newVar.schedule || []);
+      localStorage.setItem(PLAN_KEY, JSON.stringify(newVar.schedule || []));
     } catch (err) {
       setError('Ошибка создания варианта: ' + err.message);
     }
@@ -120,7 +181,7 @@ export default function App() {
   async function handleRenameVariant(id, name) {
     try {
       await api.updateVariant(id, { name });
-      setVariants(prev => prev.map(v => v.id === id ? { ...v, name } : v));
+      setVariants((prev) => prev.map((v) => (v.id === id ? { ...v, name } : v)));
     } catch (err) {
       setError('Ошибка переименования: ' + err.message);
     }
@@ -128,12 +189,16 @@ export default function App() {
 
   async function handleDeleteVariant(id) {
     try {
-      await api.deleteVariant(id);
-      const remaining = variants.filter(v => v.id !== id);
+      const res = await api.deleteVariant(id);
+      const remaining = variants.filter((v) => v.id !== id);
       setVariants(remaining);
+
       if (activeVariantId === id && remaining.length > 0) {
-        setActiveVariantId(remaining[0].id);
-        setPlan(remaining[0].schedule || []);
+        const nextId = res.activeVariantId || remaining[0].id;
+        const nextVar = remaining.find((v) => v.id === nextId) || remaining[0];
+        setActiveVariantId(nextVar.id);
+        setPlan(nextVar.schedule || []);
+        localStorage.setItem(PLAN_KEY, JSON.stringify(nextVar.schedule || []));
       }
     } catch (err) {
       setError('Ошибка удаления варианта: ' + err.message);
@@ -264,7 +329,7 @@ export default function App() {
       practice: practice ? { section: practice.section, teacher: practice.teacher, schedule: practice.schedule } : null,
       lab: lab ? { section: lab.section, teacher: lab.teacher, schedule: lab.schedule } : null,
     };
-    setPlan((prev) => [...prev.filter((p) => p.code !== open.code), entry]);
+    updatePlan((prev) => [...prev.filter((p) => p.code !== open.code), entry]);
     backToHome();
   }
 
@@ -428,7 +493,7 @@ export default function App() {
                     {p.practice && <> · P {p.practice.section} ({p.practice.teacher}) {timeStr(p.practice)}</>}
                   </div>
                 </div>
-                <button className="btn btn-mini" onClick={() => setPlan((prev) => prev.filter((x) => x.code !== p.code))}>drop</button>
+                <button className="btn btn-mini" onClick={() => updatePlan((prev) => prev.filter((x) => x.code !== p.code))}>drop</button>
               </div>
             ))}
             {plan.length > 0 && chips.some((c) => c.conflict) && (

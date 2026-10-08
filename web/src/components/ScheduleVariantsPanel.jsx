@@ -86,6 +86,7 @@ export default function ScheduleVariantsPanel({
                   if (e.key === 'Escape') setEditingId(null);
                 }}
                 autoFocus
+                maxLength={50}
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   fontSize: '0.85rem',
@@ -157,6 +158,7 @@ export default function ScheduleVariantsPanel({
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Название..."
             autoFocus
+            maxLength={50}
             style={{
               fontSize: '0.85rem',
               padding: '0.25rem 0.5rem',

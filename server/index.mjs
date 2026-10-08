@@ -18,6 +18,7 @@ import { initDb, pool, bcrypt } from './db.mjs';
 import {
   createSession,
   getSession,
+  refreshSession,
   updateSession,
   deleteSession,
   setSduActive
@@ -108,6 +109,18 @@ app.use(async (req, res, next) => {
     client.onJarChange = (jar) => {
       updateSession(session.id, { sduJar: Object.fromEntries(jar) }).catch(console.error);
     };
+
+    // Sliding Session: если сессия активна и до истечения осталось менее 3 дней, продлеваем на 7 дней
+    if (session.expires_at) {
+      const expiresAtMs = new Date(session.expires_at).getTime();
+      const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+      if (expiresAtMs - Date.now() < threeDaysMs) {
+        pool.query(
+          `UPDATE sessions SET expires_at = NOW() + INTERVAL '7 days', updated_at = NOW() WHERE id = $1`,
+          [session.id]
+        ).catch(console.error);
+      }
+    }
 
     req.sessionId = session.id;
     req.session = session;
@@ -232,14 +245,9 @@ app.post('/api/auth/refresh', asyncHandler(async (req, res) => {
   const sessionId = parseCookies(req)[COOKIE];
   if (!sessionId) throw new HttpError(401, 'Нет сессии для обновления');
 
-  const session = await getSession(sessionId);
-  if (!session) throw new HttpError(401, 'Сессия не найдена или истекла');
-
-  // Продлеваем сессию на 7 дней в БД (Sliding Expiration)
-  await pool.query(
-    `UPDATE sessions SET expires_at = NOW() + INTERVAL '7 days', updated_at = NOW() WHERE id = $1`,
-    [sessionId]
-  );
+  // Продлеваем сессию на 7 дней в БД (с grace period 14 дней для недавно истекших)
+  const session = await refreshSession(sessionId, 14);
+  if (!session) throw new HttpError(401, 'Сессия не найдена или окончательно истекла');
 
   setSessionCookie(res, sessionId);
   res.json({ ok: true, status: 'ok' });
@@ -534,29 +542,80 @@ app.post('/api/electives', asyncHandler(async (req, res) => {
 }));
 
 // ------------------------------------------------- Варианты расписания (Schedule Variants)
+// Демо-хранилище вариантов расписания для DEMO=1
+let demoVariants = [
+  {
+    id: 'demo-variant-1',
+    name: 'Основной',
+    schedule: [],
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+];
+
+// ------------------------------------------------- Варианты расписания (Schedule Variants)
 app.get('/api/schedule/variants', asyncHandler(async (req, res) => {
+  if (DEMO) {
+    return res.json({
+      variants: demoVariants,
+      activeVariantId: demoVariants.find((v) => v.is_active)?.id ?? demoVariants[0]?.id
+    });
+  }
   const client = requireAuth(req);
   const variants = await getVariants(client.userId);
   res.json({ variants, activeVariantId: variants.find((v) => v.is_active)?.id ?? variants[0]?.id });
 }));
 
 app.post('/api/schedule/variants', asyncHandler(async (req, res) => {
-  const client = requireAuth(req);
-  const { name, schedule = [] } = req.body ?? {};
+  const { name, schedule = [], isActive = true } = req.body ?? {};
   if (!name || !String(name).trim()) throw new HttpError(400, 'укажите название варианта');
-  const variant = await createVariant(client.userId, name, schedule, false);
+  const safeName = String(name).trim().slice(0, 100);
+
+  if (DEMO) {
+    if (isActive) demoVariants.forEach((v) => { v.is_active = false; });
+    const newVar = {
+      id: 'demo-variant-' + Date.now(),
+      name: safeName,
+      schedule,
+      is_active: Boolean(isActive),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    demoVariants.push(newVar);
+    return res.json(newVar);
+  }
+
+  const client = requireAuth(req);
+  const variant = await createVariant(client.userId, safeName, schedule, Boolean(isActive));
   res.json(variant);
 }));
 
 app.put('/api/schedule/variants/:id', asyncHandler(async (req, res) => {
-  const client = requireAuth(req);
   const { name, schedule } = req.body ?? {};
+  if (DEMO) {
+    const v = demoVariants.find((x) => x.id === req.params.id);
+    if (!v) throw new HttpError(404, 'Вариант не найден');
+    if (name !== undefined) v.name = String(name).trim().slice(0, 100);
+    if (schedule !== undefined) v.schedule = schedule;
+    v.updated_at = new Date().toISOString();
+    return res.json(v);
+  }
+
+  const client = requireAuth(req);
   const updated = await updateVariant(client.userId, req.params.id, { name, schedule });
   if (!updated) throw new HttpError(404, 'Вариант не найден');
   res.json(updated);
 }));
 
 app.put('/api/schedule/variants/:id/active', asyncHandler(async (req, res) => {
+  if (DEMO) {
+    demoVariants.forEach((x) => { x.is_active = (x.id === req.params.id); });
+    const active = demoVariants.find((x) => x.id === req.params.id);
+    if (!active) throw new HttpError(404, 'Вариант не найден');
+    return res.json(active);
+  }
+
   const client = requireAuth(req);
   const active = await setActiveVariant(client.userId, req.params.id);
   if (!active) throw new HttpError(404, 'Вариант не найден');
@@ -564,10 +623,18 @@ app.put('/api/schedule/variants/:id/active', asyncHandler(async (req, res) => {
 }));
 
 app.delete('/api/schedule/variants/:id', asyncHandler(async (req, res) => {
+  if (DEMO) {
+    demoVariants = demoVariants.filter((x) => x.id !== req.params.id);
+    if (demoVariants.length > 0 && !demoVariants.some((x) => x.is_active)) {
+      demoVariants[0].is_active = true;
+    }
+    return res.json({ ok: true, activeVariantId: demoVariants.find((x) => x.is_active)?.id ?? null });
+  }
+
   const client = requireAuth(req);
-  const ok = await deleteVariant(client.userId, req.params.id);
-  if (!ok) throw new HttpError(404, 'Вариант не найден');
-  res.json({ ok: true });
+  const result = await deleteVariant(client.userId, req.params.id);
+  if (!result.ok) throw new HttpError(404, 'Вариант не найден');
+  res.json(result);
 }));
 
 // ------------------------------------------------- Профиль пользователя

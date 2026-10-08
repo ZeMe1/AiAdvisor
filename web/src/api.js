@@ -73,7 +73,7 @@ export const api = {
   profile: () => j('/api/profile'),
   updateProfile: (body) => j('/api/profile', { method: 'PUT', body: JSON.stringify(body) }),
   getVariants: () => j('/api/schedule/variants'),
-  createVariant: (name, schedule = []) => j('/api/schedule/variants', post('/api/schedule/variants', { name, schedule })),
+  createVariant: (name, schedule = [], isActive = true) => j('/api/schedule/variants', post('/api/schedule/variants', { name, schedule, isActive })),
   updateVariant: (id, data) => j(`/api/schedule/variants/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
   setActiveVariant: (id) => j(`/api/schedule/variants/${encodeURIComponent(id)}/active`, { method: 'PUT' }),
   deleteVariant: (id) => j(`/api/schedule/variants/${encodeURIComponent(id)}`, { method: 'DELETE' }),

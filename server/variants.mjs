@@ -35,10 +35,12 @@ export async function getVariants(userId) {
   return rows;
 }
 
-export async function createVariant(userId, name, schedule = [], isActive = false) {
+export async function createVariant(userId, name, schedule = [], isActive = true) {
   if (!userId || !name) throw new Error('userId and name are required');
+  const safeName = String(name).trim().slice(0, 100);
+  if (!safeName) throw new Error('name is required');
 
-  // Если это первый вариант или запрошена активность — сбрасываем активность у остальных
+  // Если этот вариант активный — сбрасываем активность у остальных
   if (isActive) {
     await pool.query(
       `UPDATE schedule_variants SET is_active = false WHERE user_id = $1`,
@@ -50,7 +52,7 @@ export async function createVariant(userId, name, schedule = [], isActive = fals
     `INSERT INTO schedule_variants (user_id, name, schedule, is_active, created_at, updated_at)
      VALUES ($1, $2, $3::jsonb, $4, NOW(), NOW())
      RETURNING id, user_id, name, schedule, is_active, created_at, updated_at`,
-    [userId, name.trim(), JSON.stringify(schedule), isActive]
+    [userId, safeName, JSON.stringify(schedule), Boolean(isActive)]
   );
 
   return rows[0];
@@ -65,7 +67,7 @@ export async function updateVariant(userId, variantId, { name, schedule }) {
 
   if (name !== undefined) {
     updates.push(`name = $${idx++}`);
-    params.push(String(name).trim());
+    params.push(String(name).trim().slice(0, 100));
   }
   if (schedule !== undefined) {
     updates.push(`schedule = $${idx++}::jsonb`);
@@ -108,7 +110,7 @@ export async function setActiveVariant(userId, variantId) {
 }
 
 export async function deleteVariant(userId, variantId) {
-  if (!userId || !variantId) return false;
+  if (!userId || !variantId) return { ok: false };
 
   const { rows } = await pool.query(
     `DELETE FROM schedule_variants
@@ -117,19 +119,28 @@ export async function deleteVariant(userId, variantId) {
     [variantId, userId]
   );
 
-  if (rows.length === 0) return false;
+  if (rows.length === 0) return { ok: false };
 
+  let nextActiveId = null;
   // Если удалённый вариант был активным — делаем активным первый оставшийся
   if (rows[0].is_active) {
-    await pool.query(
+    const next = await pool.query(
       `UPDATE schedule_variants
        SET is_active = true
        WHERE id = (
          SELECT id FROM schedule_variants WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1
-       )`,
+       )
+       RETURNING id`,
       [userId]
     );
+    nextActiveId = next.rows[0]?.id || null;
+  } else {
+    const currentActive = await pool.query(
+      `SELECT id FROM schedule_variants WHERE user_id = $1 AND is_active = true LIMIT 1`,
+      [userId]
+    );
+    nextActiveId = currentActive.rows[0]?.id || null;
   }
 
-  return true;
+  return { ok: true, activeVariantId: nextActiveId };
 }
