@@ -60,8 +60,10 @@ export default function App() {
       setStage('main'); 
       if (!m.demo) api.profile().then(setProfile).catch(console.error);
     }).catch((e) => {
-      if (authFail(e)) return;
       setStage('login');
+      if (e?.sduSessionExpired) {
+        setLoginNotice('Сессия портала SDU истекла — войдите заново.');
+      }
     });
   }, []);
 

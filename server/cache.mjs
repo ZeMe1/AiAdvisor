@@ -37,6 +37,10 @@ export async function getCachedStudentData(username, maxAgeMs = STUDENT_CACHE_TT
   };
 }
 
+export async function getStaleCachedStudentData(username) {
+  return getCachedStudentData(username, Infinity);
+}
+
 export async function setCachedStudentData(username, data) {
   if (!username || !data) return;
   await pool.query(

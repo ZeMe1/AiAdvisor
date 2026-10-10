@@ -25,6 +25,7 @@ import {
 } from './session.mjs';
 import {
   getCachedStudentData,
+  getStaleCachedStudentData,
   setCachedStudentData,
   clearCachedStudentData,
   getCachedCurriculum,
@@ -339,13 +340,13 @@ async function getMe(client) {
   try {
     me = await client.getCourseReg();
   } catch (err) {
-    const cached = await getCachedStudentData(client.localUsername);
+    const cached = await getStaleCachedStudentData(client.localUsername);
     if (cached) return cached;
     throw err;
   }
 
   if (me.authenticated === false) {
-    const cached = await getCachedStudentData(client.localUsername);
+    const cached = await getStaleCachedStudentData(client.localUsername);
     if (cached) return cached;
     throw sessionExpiredError();
   }
@@ -429,10 +430,18 @@ app.get('/api/me', asyncHandler(async (req, res) => {
     }
   }
 
-  // 2. Запрашиваем свежие данные с портала SDU
-  const data = await getMe(client);
-  await setCachedStudentData(client.localUsername, data).catch(console.error);
-  res.json({ ...data, sduActive });
+  // 2. Запрашиваем свежие данные с портала SDU с фолбэком на stale-кэш
+  try {
+    const data = await getMe(client);
+    await setCachedStudentData(client.localUsername, data).catch(console.error);
+    res.json({ ...data, sduActive });
+  } catch (err) {
+    const stale = await getStaleCachedStudentData(client.localUsername);
+    if (stale) {
+      return res.json({ ...stale, sduActive: false, _stale: true });
+    }
+    throw err;
+  }
 }));
 
 app.get('/api/curriculum', asyncHandler(async (req, res) => {
