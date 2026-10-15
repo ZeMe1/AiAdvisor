@@ -1,5 +1,4 @@
 import pg from 'pg';
-import bcrypt from 'bcrypt';
 
 const { Pool } = pg;
 
@@ -81,4 +80,4 @@ export async function initDb() {
   console.log('Database initialized with sessions & caching tables.');
 }
 
-export { pool, bcrypt };
+export { pool };
