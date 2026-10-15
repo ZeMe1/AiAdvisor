@@ -19,11 +19,14 @@ export default function HomePage() {
 
   const [search, setSearch] = useState('');
 
+  const toastRef = React.useRef(toast);
+  toastRef.current = toast;
+
   useEffect(() => {
     loadCurriculum().catch((err) => {
-      toast.error('Не удалось загрузить куррикулум: ' + err.message);
+      toastRef.current.error('Не удалось загрузить куррикулум: ' + err.message);
     });
-  }, [loadCurriculum, toast]);
+  }, [loadCurriculum]);
 
   const chips = getScheduleChips(false);
   const hasConflict = chips.some((c) => c.conflict);
@@ -31,12 +34,21 @@ export default function HomePage() {
   const handleSearch = () => {
     const trimmed = search.trim();
     if (!trimmed) return;
+    if (/^XXX/i.test(trimmed)) {
+      toast.warn('Нельзя выполнить поиск по коду электива. Выберите конкретный курс.');
+      return;
+    }
     navigate(`/courses/${encodeURIComponent(trimmed)}`);
   };
 
   const handleChoose = (course) => {
-    if (course.isElective && course.elective) {
-      navigate(`/electives/${encodeURIComponent(course.code)}`, { state: { course } });
+    const isElective = course.isElective || /^XXX/i.test(course.code);
+    if (isElective) {
+      if (course.elective) {
+        navigate(`/electives/${encodeURIComponent(course.code)}`, { state: { course } });
+      } else {
+        toast.warn(`У элективной группы ${course.code} нет доступных вариантов в текущем плане.`);
+      }
     } else {
       const mufSqId = course.sectionsParams?.mufSqId;
       navigate(`/courses/${encodeURIComponent(course.code)}${mufSqId ? `?mufSqId=${encodeURIComponent(mufSqId)}` : ''}`);

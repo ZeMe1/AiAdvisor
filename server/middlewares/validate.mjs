@@ -14,7 +14,9 @@ export const validateBody = (schema) => (req, res, next) => {
 };
 
 /**
- * Валидатор параметров строки запроса (req.query) через Zod
+ * Валидатор параметров строки запроса (req.query) через Zod.
+ * В Express 5 `req.query` имеет только геттер на прототипе IncomingMessage,
+ * поэтому переопределяем свойство напрямую на экземпляре запроса через defineProperty.
  */
 export const validateQuery = (schema) => (req, res, next) => {
   const result = schema.safeParse(req.query ?? {});
@@ -22,7 +24,12 @@ export const validateQuery = (schema) => (req, res, next) => {
     const message = (result.error.issues || []).map((e) => e.message).join(', ');
     return next(HttpError.badRequest(message));
   }
-  req.query = result.data;
+  Object.defineProperty(req, 'query', {
+    value: result.data,
+    writable: true,
+    configurable: true,
+    enumerable: true,
+  });
   next();
 };
 
@@ -35,6 +42,11 @@ export const validateParams = (schema) => (req, res, next) => {
     const message = (result.error.issues || []).map((e) => e.message).join(', ');
     return next(HttpError.badRequest(message));
   }
-  req.params = result.data;
+  Object.defineProperty(req, 'params', {
+    value: result.data,
+    writable: true,
+    configurable: true,
+    enumerable: true,
+  });
   next();
 };

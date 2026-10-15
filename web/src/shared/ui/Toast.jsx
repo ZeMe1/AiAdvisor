@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 const ToastContext = createContext(null);
 
@@ -6,40 +6,50 @@ export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
   const addToast = useCallback((message, type = 'info', duration = 3500) => {
-    const id = Date.now() + Math.random().toString(36).substring(2, 6);
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => {
+      // Защита от спама одинаковыми сообщениями
+      if (prev.some((t) => t.message === message)) return prev;
 
-    if (duration > 0) {
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, duration);
-    }
+      const id = Date.now() + Math.random().toString(36).substring(2, 6);
+      if (duration > 0) {
+        setTimeout(() => {
+          setToasts((current) => current.filter((t) => t.id !== id));
+        }, duration);
+      }
+      return [...prev, { id, message, type }];
+    });
   }, []);
 
   const removeToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const toast = {
-    info: (msg, dur) => addToast(msg, 'info', dur),
-    success: (msg, dur) => addToast(msg, 'success', dur),
-    warn: (msg, dur) => addToast(msg, 'warn', dur),
-    error: (msg, dur) => addToast(msg, 'error', dur),
-  };
+  const toast = useMemo(
+    () => ({
+      info: (msg, dur) => addToast(msg, 'info', dur),
+      success: (msg, dur) => addToast(msg, 'success', dur),
+      warn: (msg, dur) => addToast(msg, 'warn', dur),
+      error: (msg, dur) => addToast(msg, 'error', dur),
+    }),
+    [addToast]
+  );
 
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <div className="toast-container" style={{
-        position: 'fixed',
-        bottom: '24px',
-        right: '24px',
-        zIndex: 9999,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-        maxWidth: '380px',
-      }}>
+      <div
+        className="toast-container"
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 9999,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          maxWidth: '380px',
+        }}
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
@@ -56,7 +66,14 @@ export function ToastProvider({ children }) {
               justifyContent: 'space-between',
               gap: '12px',
               animation: 'fadeIn 0.2s ease-in-out',
-              backgroundColor: t.type === 'error' ? '#c0392b' : t.type === 'success' ? '#27ae60' : t.type === 'warn' ? '#d35400' : '#2980b9',
+              backgroundColor:
+                t.type === 'error'
+                  ? '#c0392b'
+                  : t.type === 'success'
+                    ? '#27ae60'
+                    : t.type === 'warn'
+                      ? '#d35400'
+                      : '#2980b9',
               color: '#ffffff',
             }}
           >

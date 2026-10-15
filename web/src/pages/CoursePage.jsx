@@ -28,16 +28,34 @@ export default function CoursePage() {
     getScheduleChips,
   } = useScheduleStore();
 
+  const toastRef = React.useRef(toast);
+  toastRef.current = toast;
+
   useEffect(() => {
-    if (code) {
-      loadCourse(decodeURIComponent(code), mufSqId).catch((err) => {
-        toast.error('Ошибка загрузки курса: ' + err.message);
-      });
-    }
+    if (!code) return;
+    const decodedCode = decodeURIComponent(code);
+    if (/^XXX/i.test(decodedCode)) return;
+
+    loadCourse(decodedCode, mufSqId).catch((err) => {
+      toastRef.current.error('Ошибка загрузки курса: ' + err.message);
+    });
     return () => {
       clearOpenCourse();
     };
-  }, [code, mufSqId, loadCourse, clearOpenCourse, toast]);
+  }, [code, mufSqId, loadCourse, clearOpenCourse]);
+
+  if (code && /^XXX/i.test(decodeURIComponent(code))) {
+    return (
+      <main className="page">
+        <div className="card">
+          <button className="btn" onClick={() => navigate('/')}>← Назад к куррикулуму</button>
+          <div className="banner-warn" style={{ marginTop: '16px' }}>
+            Код <b>{decodeURIComponent(code)}</b> обозначает группу элективов. Пожалуйста, выберите конкретный курс из предложенных вариантов в куррикулуме.
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (loadingCourse) {
     return (

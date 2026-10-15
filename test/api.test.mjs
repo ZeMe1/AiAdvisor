@@ -44,4 +44,34 @@ describe('API Integration & Validation Tests', () => {
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
   });
+
+  it('validateQuery handles req.query safely without Express 5 getter conflict', async () => {
+    const express = (await import('express')).default;
+    const { z } = await import('zod');
+    const { validateQuery } = await import('../server/middlewares/validate.mjs');
+
+    const testApp = express();
+    testApp.get('/test-query', validateQuery(z.object({ code: z.string() })), (req, res) => {
+      res.json({ code: req.query.code });
+    });
+
+    const res = await request(testApp).get('/test-query?code=CSS101');
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe('CSS101');
+  });
+
+  it('validateParams handles req.params safely without Express 5 getter conflict', async () => {
+    const express = (await import('express')).default;
+    const { z } = await import('zod');
+    const { validateParams } = await import('../server/middlewares/validate.mjs');
+
+    const testApp = express();
+    testApp.get('/test-params/:id', validateParams(z.object({ id: z.string() })), (req, res) => {
+      res.json({ id: req.params.id });
+    });
+
+    const res = await request(testApp).get('/test-params/42');
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('42');
+  });
 });
