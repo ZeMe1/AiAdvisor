@@ -2,12 +2,13 @@ import React from 'react';
 
 /** Корзина/утверждённые регистрации — как «List of Courses in Basket» на портале. */
 export default function Basket({ me }) {
-  const credits = me.approved.reduce((a, c) => a + (Number(c.credits) || 0), 0);
-  const ects = me.approved.reduce((a, c) => a + (Number(c.ects) || 0), 0);
+  const approved = me?.approved ?? [];
+  const credits = approved.reduce((a, c) => a + (Number(c.credits) || 0), 0);
+  const ects = approved.reduce((a, c) => a + (Number(c.ects) || 0), 0);
 
   return (
     <section className="card">
-      <h2>🛒 Корзина курсов — {me.term}</h2>
+      <h2>🛒 Корзина курсов — {me?.term || ''}</h2>
       {me.isApproved && <p className="muted">Регистрация на семестр подтверждена.</p>}
       <table className="tbl">
         <thead>

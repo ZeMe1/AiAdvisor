@@ -1,0 +1,59 @@
+{
+  "CODE": 1,
+  "DATA": "<div class=\"desc\"><b>CSS 101 - Introduction to Computer Science [ 2 + 2 + 0 ] / 5 ects</b></div>",
+  "DATA2": [
+    {
+      "1001": {
+        "DERS_SOBE_ID": "1001",
+        "DERS_KOD": "CSS 101",
+        "YEAR": 2026,
+        "TERM": 1,
+        "SECTION": "01",
+        "MESSAGE": "",
+        "TEACHER": "Dr. Alan Turing",
+        "EMP_ID": "501",
+        "K_TEOR": 2,
+        "K_PRAT": 0,
+        "K_LAB": 0,
+        "K_QU": 2,
+        "QUOTA": 40,
+        "STUD_COUNT": 35,
+        "RESERVED_QUOTA": 0,
+        "SCHEDULED": "1",
+        "SCHEDULE": "1.08:30,1.09:30",
+        "PRACTICE": "2001,2002",
+        "LAB": "",
+        "STATUS": "A"
+      }
+    },
+    {
+      "2001": {
+        "DERS_SOBE_ID": "2001",
+        "DERS_KOD": "CSS 101",
+        "YEAR": 2026,
+        "TERM": 1,
+        "SECTION": "01",
+        "MESSAGE": "",
+        "TEACHER": "Ada Lovelace",
+        "EMP_ID": "502",
+        "K_TEOR": 0,
+        "K_PRAT": 2,
+        "K_LAB": 0,
+        "K_QU": 2,
+        "QUOTA": 20,
+        "STUD_COUNT": 15,
+        "RESERVED_QUOTA": 0,
+        "SCHEDULED": "1",
+        "SCHEDULE": "3.11:30,3.12:30",
+        "PRACTICE": "",
+        "LAB": "",
+        "STATUS": "A"
+      }
+    },
+    []
+  ],
+  "DATA3": {
+    "DEP_CODE": "CSS",
+    "PROG_CODE": "IS"
+  }
+}

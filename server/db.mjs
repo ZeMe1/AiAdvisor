@@ -30,13 +30,15 @@ export async function initDb() {
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       username VARCHAR(255) UNIQUE NOT NULL,
-      password_hash VARCHAR(255) NOT NULL,
+      password_hash VARCHAR(255),
       display_name VARCHAR(255),
       avatar_url TEXT,
       role VARCHAR(50) DEFAULT 'Student',
       is_blocked BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
 
     CREATE TABLE IF NOT EXISTS sessions (
       id VARCHAR(64) PRIMARY KEY,

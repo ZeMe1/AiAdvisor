@@ -19,18 +19,18 @@ async function j(url, opts = {}) {
   return data;
 }
 
-const post = (url, body) => ({ method: 'POST', body: JSON.stringify(body) });
+const post = (body) => ({ method: 'POST', body: JSON.stringify(body) });
 
 export const api = {
-  login: (username, password) => j('/api/auth/login', post('/api/auth/login', { username, password })),
-  twoFa: (code) => j('/api/auth/2fa', post('/api/auth/2fa', { code })),
+  login: (username, password) => j('/api/auth/login', post({ username, password })),
+  twoFa: (code) => j('/api/auth/2fa', post({ code })),
   logout: () => j('/api/auth/logout', { method: 'POST' }),
   me: (refresh = false) => j(`/api/me${refresh ? '?refresh=1' : ''}`),
   curriculum: () => j('/api/curriculum'),
   sections: (code, mufSqId) =>
     j(`/api/sections?code=${encodeURIComponent(code)}${mufSqId ? `&mufSqId=${encodeURIComponent(mufSqId)}` : ''}`),
   search: (code) => j(`/api/search?code=${encodeURIComponent(code)}`),
-  electives: (payload) => j('/api/electives', post('/api/electives', payload)),
+  electives: (payload) => j('/api/electives', post(payload)),
   profile: () => j('/api/profile'),
   updateProfile: (body) => j('/api/profile', { method: 'PUT', body: JSON.stringify(body) }),
   adminGetUsers: () => j('/api/admin/users'),

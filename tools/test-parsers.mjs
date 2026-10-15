@@ -7,9 +7,15 @@ import { parseCurriculumHtml } from '../src/sdu/parsers/curriculum.js';
 import { parseSectionsResponse } from '../src/sdu/parsers/sections.js';
 import { parseCourseRegPage } from '../src/sdu/parsers/registrations.js';
 
-const dir = process.argv[2]
-  ? path.resolve(process.argv[2])
-  : path.resolve('dumps', fs.readdirSync('dumps').sort().pop());
+let dir = process.argv[2] ? path.resolve(process.argv[2]) : null;
+if (!dir && fs.existsSync('dumps')) {
+  const list = fs.readdirSync('dumps').sort();
+  if (list.length > 0) dir = path.resolve('dumps', list.pop());
+}
+if (!dir || !fs.existsSync(dir)) {
+  console.log('# Папка dumps не найдена. Для прогона автоматизированных тестов используйте: npm test (Vitest).');
+  process.exit(0);
+}
 console.log(`# Дампы: ${dir}\n`);
 
 // ---- curriculum ----
