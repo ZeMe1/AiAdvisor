@@ -42,7 +42,7 @@ export class UserRepository {
     );
     return rows[0] || null;
   }
-
+//
   async listAllUsers() {
     const { rows } = await pool.query(
       'SELECT id, username, display_name, role, is_blocked, created_at FROM users ORDER BY created_at DESC'
