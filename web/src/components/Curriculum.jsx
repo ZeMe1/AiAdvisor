@@ -8,8 +8,17 @@ const ST_CLASS = {
   unknown: 'st-unknown',
 };
 
+function getTermLabel(semNo, startYear = 2024) {
+  const no = Number(semNo);
+  if (!no || no < 1) return '';
+  const yearOffset = Math.floor((no - 1) / 2);
+  const isFall = no % 2 === 1;
+  const year = startYear + yearOffset;
+  return isFall ? `(Fall ${year})` : `(Spring ${year + 1})`;
+}
+
 function CourseRow({ course, index, onChoose }) {
-  const chooseable = Boolean(course.sectionsParams) || course.isElective;
+  const chooseable = Boolean(course.sectionsParams) || course.isElective || course.isCustom;
   return (
     <tr className={ST_CLASS[course.status] ?? 'st-unknown'}>
       <td className="dim c">{index + 1}</td>
@@ -18,15 +27,15 @@ function CourseRow({ course, index, onChoose }) {
         {course.lastTaken && <span className="dim small"> {course.lastTaken}</span>}
       </td>
       <td>
-        {course.name}
+        <div>{course.name}</div>
         {course.isElective && course.elective && (
           <div className="small muted">
-            элективная группа · {course.elective.candidateCodes.length} курсов на выбор
+            elective group · {course.elective.candidateCodes.length} elective choices
           </div>
         )}
       </td>
-      <td className="c">{course.hours.teor}</td>
-      <td className="c">{course.hours.practice}</td>
+      <td className="c">{course.hours?.teor ?? 2}</td>
+      <td className="c">{course.hours?.practice ?? '0+2'}</td>
       <td className="c">{course.credits}</td>
       <td className="c">{course.ects}</td>
       <td className="c">{course.grade ?? ''}</td>
@@ -39,8 +48,11 @@ function CourseRow({ course, index, onChoose }) {
   );
 }
 
-/** Куррикулум по семестрам — как «From your program» на портале. */
+/** Semester curriculum breakdown — mirrors "From your program" on the portal. */
 export default function Curriculum({ curriculum, onChoose }) {
+  const titleYearMatch = String(curriculum.program?.title || '').match(/\b(20\d\d)\b/);
+  const startYear = titleYearMatch ? parseInt(titleYearMatch[1], 10) : 2024;
+
   return (
     <section className="card">
       <h2 className="prog-title">
@@ -68,7 +80,9 @@ export default function Curriculum({ curriculum, onChoose }) {
                 ))}
               </tbody>
             </table>
-            <div className="sum-ects">Семестр {sem.no} · Sum ECTS: <b>{sumEcts}</b></div>
+            <div className="sum-ects">
+              Semester {sem.no} <span style={{ color: '#0052cc', fontWeight: 600 }}>{getTermLabel(sem.no, startYear)}</span> · Sum ECTS: <b>{sumEcts}</b>
+            </div>
           </div>
         );
       })}

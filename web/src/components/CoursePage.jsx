@@ -26,7 +26,7 @@ export default function CoursePage({ me, open, draft, setDraft, chips, conflict,
   return (
     <>
       <div className="course-topline">
-        <button className="btn" onClick={onBack}>← К списку курсов</button>
+        <button className="btn" onClick={onBack}>← Back to courses</button>
         <h2 className="course-title">
           {code} — {name || '?'}
           <span className="muted"> [{data.course.hours}] / {data.course.ects} ects</span>
@@ -36,7 +36,7 @@ export default function CoursePage({ me, open, draft, setDraft, chips, conflict,
       <Basket me={me} />
 
       <section className="card">
-        <h2>Шаг 1 · Theory (Lecture) sections <span className="muted small">— выберите лекцию</span></h2>
+        <h2>Step 1 · Theory (Lecture) sections <span className="muted small">— select lecture</span></h2>
         <SectionTable
           kind="N" sections={data.theory} selectedId={draft.N}
           onSelect={(id) => setDraft({ ...draft, N: id })}
@@ -46,9 +46,9 @@ export default function CoursePage({ me, open, draft, setDraft, chips, conflict,
       {theory && data.practice.length > 0 && (
         <section className="card">
           <h2>
-            Шаг 2 · Practice sections{' '}
+            Step 2 · Practice sections{' '}
             <span className="muted small">
-              {ownPractices ? '— практики выбранной лекции' : '— у этой лекции нет привязанных практик, показаны все'}
+              {ownPractices ? '— practices for selected lecture' : '— no linked practices for this lecture, showing all'}
             </span>
           </h2>
           <SectionTable
@@ -59,7 +59,7 @@ export default function CoursePage({ me, open, draft, setDraft, chips, conflict,
             <button className="btn btn-primary" disabled={!canAdd} onClick={() => onAdd({ theory, practice })}>
               add to plan
             </button>
-            <span className="muted small">Добавление никуда не записывается в SDU — это только ваш план.</span>
+            <span className="muted small">Courses are saved locally — this is only your plan, not sent to SDU.</span>
           </div>
         </section>
       )}
@@ -67,7 +67,7 @@ export default function CoursePage({ me, open, draft, setDraft, chips, conflict,
       {theory && data.practice.length === 0 && (
         <div className="panel-actions card">
           <button className="btn btn-primary" onClick={() => onAdd({ theory, practice: null })}>add to plan</button>
-          <span className="muted small">У курса нет практик — добавляем только лекцию.</span>
+          <span className="muted small">This course has no practice sections — adding lecture only.</span>
         </div>
       )}
 
@@ -83,7 +83,7 @@ export default function CoursePage({ me, open, draft, setDraft, chips, conflict,
 
       {conflict && (
         <div className="banner-warn">
-          ⚠ Выбранные слоты пересекаются по времени с корзиной или другими курсами плана — они обведены красным на сетке.
+          ⚠ Selected slots conflict in time with course basket or other planned courses — outlined in red on the grid.
         </div>
       )}
 

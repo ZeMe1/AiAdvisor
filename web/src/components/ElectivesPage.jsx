@@ -9,20 +9,20 @@ export default function ElectivesPage({ me, group, list, busy, error, onChoose, 
   return (
     <>
       <div className="course-topline">
-        <button className="btn" onClick={onBack}>← К списку курсов</button>
+        <button className="btn" onClick={onBack}>← Back to courses</button>
         <h2 className="course-title">
-          Электив — {group.name || group.code}
-          <span className="muted"> · выберите курс из группы</span>
+          Elective — {group.name || group.code}
+          <span className="muted"> · select a course from the group</span>
         </h2>
       </div>
 
       <Basket me={me} />
 
       <section className="card">
-        <h2>Курсы на выбор ({list.length})</h2>
-        {busy && <p className="muted">Загружаем список с портала…</p>}
+        <h2>Available Courses ({list.length})</h2>
+        {busy && <p className="muted">Loading course list from portal…</p>}
         {!busy && error && (
-          <p className="banner-warn">Не удалось получить список с портала ({error}) — показаны коды из вашей программы.</p>
+          <p className="banner-warn">Could not load list from portal ({error}) — showing candidate codes from curriculum.</p>
         )}
         <table className="tbl">
           <thead>
@@ -35,7 +35,7 @@ export default function ElectivesPage({ me, group, list, busy, error, onChoose, 
               <tr key={c.code} className="st-not-taken">
                 <td className="dim c">{i + 1}</td>
                 <td className="code">{c.code}</td>
-                <td>{c.name || <span className="muted small">название появится на портале при выборе</span>}</td>
+                <td>{c.name || <span className="muted small">title will appear upon selection</span>}</td>
                 <td className="c">{c.credits ?? '—'}</td>
                 <td className="c">{c.ects ?? '—'}</td>
                 <td className="c">

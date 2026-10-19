@@ -9,6 +9,8 @@ import CoursePage from './components/CoursePage.jsx';
 import ElectivesPage from './components/ElectivesPage.jsx';
 import ProfilePage from './components/ProfilePage.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
+import Transcript from './components/Transcript.jsx';
+import ProgressDashboard from './components/ProgressDashboard.jsx';
 
 const PLAN_KEY = 'zeme_plan_v1';
 const loadPlan = () => {
@@ -102,7 +104,7 @@ export default function App() {
   function authFail(e) {
     if (e?.status !== 401) return false;
     setStage('login');
-    setLoginNotice('Сессия портала истекла — войдите заново, придёт новый код 2FA');
+    setLoginNotice('Portal session expired — please log in again, a new 2FA code will be sent to your email');
     return true;
   }
 
@@ -113,6 +115,7 @@ export default function App() {
     setElective(null);
     setElectiveList(null);
     setElectiveError(null);
+    api.curriculum().then(setCurriculum).catch(console.error);
     window.scrollTo(0, 0);
   }
 
@@ -208,7 +211,7 @@ export default function App() {
 
   const conflictOnCourse = chips.some((c) => c.conflict && c.color === 'sel');
 
-  if (stage === 'boot') return <div className="boot">Загрузка…</div>;
+  if (stage === 'boot') return <div className="boot">Loading…</div>;
   if (stage === 'login') return <Login onLogin={handleLogin} notice={loginNotice} />;
   if (stage === '2fa') return <TwoFa onSubmit={handle2fa} />;
 
@@ -221,7 +224,19 @@ export default function App() {
           {me.user?.name && <span>{me.user.name} · {me.user.program}</span>}
           {me.demo && <span className="demo-badge">demo data</span>}
         </span>
-        <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button 
+            className={`btn ${view === 'progress' ? 'btn-primary' : ''}`} 
+            onClick={() => { setView('progress'); window.scrollTo(0,0); }}
+          >
+            📈 Progress
+          </button>
+          <button 
+            className={`btn ${view === 'transcript' ? 'btn-primary' : ''}`} 
+            onClick={() => { setView('transcript'); window.scrollTo(0,0); }}
+          >
+            📄 Transcript
+          </button>
           {profile?.role === 'Administrator' && (
             <button className="btn" onClick={() => { setView('admin'); window.scrollTo(0,0); }}>
               Admin Panel
@@ -251,7 +266,22 @@ export default function App() {
 
       {error && <div className="banner-error" onClick={() => setError(null)}>{error} ✕</div>}
 
-      {view === 'admin' && profile?.role === 'Administrator' ? (
+      {view === 'progress' ? (
+        <main className="page">
+          <ProgressDashboard 
+            onBack={backToHome} 
+            onOpenTranscript={() => { setView('transcript'); window.scrollTo(0,0); }}
+          />
+        </main>
+      ) : view === 'transcript' ? (
+        <main className="page">
+          <Transcript 
+            onBack={backToHome} 
+            onOpenProgress={() => { setView('progress'); window.scrollTo(0,0); }}
+            profile={profile} 
+          />
+        </main>
+      ) : view === 'admin' && profile?.role === 'Administrator' ? (
         <main className="page">
           <AdminPanel onBack={backToHome} />
         </main>
@@ -301,14 +331,14 @@ export default function App() {
                 {busy ? '…' : 'Search'}
               </button>
             </div>
-            <p className="muted small">1 — поиск по коду · 2 — Choose в куррикулуме ниже · 3 — коды кандидатов у элективов</p>
+            <p className="muted small">1 — search by code · 2 — Choose in curriculum below · 3 — candidate codes for electives</p>
           </section>
 
           <Basket me={me} />
 
           <section className="card">
-            <h2>📝 Мой план <span className="muted small">(хранится локально, в SDU не отправляется)</span></h2>
-            {plan.length === 0 && <p className="muted">Пусто — выберите секции курса через Choose или поиск.</p>}
+            <h2>📝 My Plan <span className="muted small">(stored locally, not sent to SDU)</span></h2>
+            {plan.length === 0 && <p className="muted">Empty — pick course sections via Choose or search.</p>}
             {plan.map((p) => (
               <div className="plan-row" key={p.code}>
                 <div>
@@ -323,14 +353,14 @@ export default function App() {
             ))}
             {plan.length > 0 && chips.some((c) => c.conflict) && (
               <div className="banner-warn">
-                ⚠ Есть пересечения по времени между курсами плана и/или корзиной — открой курс, чтобы увидеть детали на сетке.
+                ⚠ Schedule conflict detected between planned courses and/or basket — open the course to view details on the grid.
               </div>
             )}
           </section>
 
           {curriculum
             ? <Curriculum curriculum={curriculum} onChoose={handleChoose} />
-            : <section className="card"><p className="muted">Куррикулум загружается…</p></section>}
+            : <section className="card"><p className="muted">Loading curriculum…</p></section>}
         </main>
       )}
     </div>

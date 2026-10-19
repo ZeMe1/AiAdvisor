@@ -7,8 +7,8 @@ export default function Basket({ me }) {
 
   return (
     <section className="card">
-      <h2>🛒 Корзина курсов — {me.term}</h2>
-      {me.isApproved && <p className="muted">Регистрация на семестр подтверждена.</p>}
+      <h2>🛒 Course Basket — {me.term}</h2>
+      {me.isApproved && <p className="muted">Semester registration approved.</p>}
       <table className="tbl">
         <thead>
           <tr>

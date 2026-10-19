@@ -7,3 +7,4 @@ dumps/
 
 .vercel
 .env*
+.data/

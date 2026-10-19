@@ -6,7 +6,7 @@ function Chip({ c }) {
     <div
       className={`chip chip-${c.color}${c.conflict ? ' chip-conflict' : ''}${c.onClick ? ' chip-clickable' : ''}`}
       onClick={c.onClick}
-      title={`${c.label}${c.teacher ? ' · ' + c.teacher : ''}${c.conflict ? ' · КОНФЛИКТ' : ''}`}
+      title={`${c.label}${c.teacher ? ' · ' + c.teacher : ''}${c.conflict ? ' · CONFLICT' : ''}`}
     >
       {c.label}
     </div>
@@ -14,8 +14,8 @@ function Chip({ c }) {
 }
 
 /**
- * Сетка недели Mo–Sa × 08:30–22:20 с цветными чипами:
- * basket (зелёный) / avail (голубой) / sel (тёмно-синий) / unavail (красный).
+ * Weekly schedule Mo–Sa x 08:30–22:20 with colored chips:
+ * basket (green) / avail (cyan) / sel (dark blue) / unavail (red).
  */
 export default function ScheduleGrid({ chips }) {
   const rows = Array.from({ length: SLOT_COUNT }, (_, i) => i);
@@ -25,7 +25,7 @@ export default function ScheduleGrid({ chips }) {
       <div className="legend">
         <span className="chip chip-basket">In basket</span>
         <span className="chip chip-sel">Selected</span>
-        <span className="chip chip-legend-conflict">Конфликт</span>
+        <span className="chip chip-legend-conflict">Conflict</span>
       </div>
       <div className="grid-wrap">
         <table className="grid">

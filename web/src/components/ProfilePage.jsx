@@ -12,13 +12,13 @@ export default function ProfilePage({ profile, onSave, onBack }) {
     
     // Check file type
     if (!file.type.startsWith('image/')) {
-      alert('Пожалуйста, выберите изображение');
+      alert('Please select an image file');
       return;
     }
     
     // Check size (max 5MB as per UserStory)
     if (file.size > 5 * 1024 * 1024) {
-      alert('Размер файла не должен превышать 5 MB');
+      alert('File size cannot exceed 5 MB');
       return;
     }
 
@@ -41,7 +41,7 @@ export default function ProfilePage({ profile, onSave, onBack }) {
         } else {
           if (height > MAX_HEIGHT) {
             width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
+            width = MAX_HEIGHT;
           }
         }
         canvas.width = width;
@@ -60,9 +60,9 @@ export default function ProfilePage({ profile, onSave, onBack }) {
     setBusy(true);
     try {
       await onSave({ display_name: name, avatar_url: avatar });
-      alert('Профиль успешно обновлен!');
+      alert('Profile updated successfully!');
     } catch (e) {
-      alert('Ошибка: ' + e.message);
+      alert('Error: ' + e.message);
     } finally {
       setBusy(false);
     }
@@ -71,12 +71,12 @@ export default function ProfilePage({ profile, onSave, onBack }) {
   return (
     <div className="card" style={{ maxWidth: 600, margin: '2rem auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-        <button className="btn" onClick={onBack}>← Назад</button>
-        <h2 style={{ margin: 0 }}>Мой профиль</h2>
+        <button className="btn" onClick={onBack}>← Back</button>
+        <h2 style={{ margin: 0 }}>My Profile</h2>
       </div>
 
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-        {/* Аватар */}
+        {/* Avatar */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
           <div 
             style={{ 
@@ -102,17 +102,17 @@ export default function ProfilePage({ profile, onSave, onBack }) {
           />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
             <button className="btn" onClick={() => fileInputRef.current?.click()}>
-              Загрузить фото
+              Upload Photo
             </button>
             {avatar && (
               <button className="btn btn-danger" onClick={() => setAvatar('')}>
-                Удалить фото
+                Remove Photo
               </button>
             )}
           </div>
         </div>
 
-        {/* Данные */}
+        {/* Details */}
         <div style={{ flex: 1, minWidth: 250 }}>
           <div style={{ marginBottom: '1rem' }}>
             <label className="small muted">SDU Login (username)</label>
@@ -120,23 +120,23 @@ export default function ProfilePage({ profile, onSave, onBack }) {
           </div>
           
           <div style={{ marginBottom: '1rem' }}>
-            <label className="small muted">Роль</label>
+            <label className="small muted">Role</label>
             <input value={profile?.role || 'Student'} disabled style={{ width: '100%', marginTop: '0.5rem' }} />
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label className="small muted">Отображаемое имя</label>
+            <label className="small muted">Display Name</label>
             <input 
               value={name} 
               onChange={(e) => setName(e.target.value)}
-              placeholder="Введите ваше имя"
+              placeholder="Enter your name"
               style={{ width: '100%', marginTop: '0.5rem' }} 
             />
           </div>
 
           <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn btn-primary" disabled={busy} onClick={handleSave}>
-              {busy ? 'Сохранение...' : 'Сохранить изменения'}
+              {busy ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </div>

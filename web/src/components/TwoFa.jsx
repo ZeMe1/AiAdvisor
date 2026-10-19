@@ -22,8 +22,8 @@ export default function TwoFa({ onSubmit }) {
     <div className="auth-wrap">
       <form className="auth-card" onSubmit={submit}>
         <div className="auth-logo">SDU · ZeMe</div>
-        <h1>Двухфакторная аутентификация</h1>
-        <p className="auth-sub">Введите 6-значный код, отправленный на вашу почту SDU</p>
+        <h1>Two-Factor Authentication</h1>
+        <p className="auth-sub">Enter the 6-digit code sent to your SDU email address</p>
         <input
           className="code-input"
           value={code}
@@ -34,7 +34,7 @@ export default function TwoFa({ onSubmit }) {
         />
         {error && <div className="auth-error">{error}</div>}
         <button className="btn btn-primary" disabled={busy || code.length !== 6}>
-          {busy ? 'Проверяем…' : 'Подтвердить'}
+          {busy ? 'Verifying…' : 'Verify & Continue'}
         </button>
       </form>
     </div>

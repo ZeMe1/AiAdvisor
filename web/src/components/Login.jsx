@@ -25,21 +25,21 @@ export default function Login({ onLogin, notice }) {
       <form className="auth-card" onSubmit={submit}>
         <div className="auth-logo">SDU · ZeMe</div>
         <h1>Student Information System</h1>
-        <p className="auth-sub">Войдите с учётными данными портала my.sdu.edu.kz</p>
+        <p className="auth-sub">Sign in with your my.sdu.edu.kz portal credentials</p>
         <label>
-          Логин
+          Username / SDU Login
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus autoComplete="username" />
         </label>
         <label>
-          Пароль
+          Password
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
         </label>
         {notice && <div className="banner-warn">{notice}</div>}
         {error && <div className="auth-error">{error}</div>}
         <button className="btn btn-primary" disabled={busy || !username || !password}>
-          {busy ? 'Входим…' : 'Log in'}
+          {busy ? 'Signing in…' : 'Log in'}
         </button>
-        <p className="auth-note">Пароль отправляется только в SDU и не сохраняется.</p>
+        <p className="auth-note">Password is sent directly to SDU portal and is not stored insecurely.</p>
       </form>
     </div>
   );
