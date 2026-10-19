@@ -24,7 +24,6 @@ const rawPool = new Pool(connectionString ? {
   port: Number(process.env.PGPORT) || 5432,
 });
 
-<<<<<<< HEAD
 rawPool.on('error', (err) => {
   // Suppress uncaught error events so process does not terminate
   console.error('[db] pg pool error:', err.message);
