@@ -6,7 +6,7 @@ const SLOT_START_HOUR = 8; // первый слот 08:30
 export const SLOT_COUNT = 14; // 08:30 .. 21:30
 
 export const slotStartLabel = (i) => String(SLOT_START_HOUR + i).padStart(2, '0') + ':30';
-export const slotEndLabel = (i) => String(SLOT_START_HOUR + i).padStart(2, '0') + ':20';
+export const slotEndLabel = (i) => String(SLOT_START_HOUR + i + 1).padStart(2, '0') + ':20';
 
 export function slotIndexOf(time) {
   const h = parseInt(time.split(':')[0], 10);

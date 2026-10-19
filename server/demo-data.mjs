@@ -12,12 +12,25 @@ import path from 'node:path';
 let data = null;
 function ensureLoaded() {
   if (data) return data;
-  const dumpDir = fs.readdirSync('dumps').map((d) => path.join('dumps', d)).sort().pop();
-  data = {
-    registrations: JSON.parse(fs.readFileSync(path.join(dumpDir, 'parsed-registrations.json'), 'utf8')),
-    curriculum: JSON.parse(fs.readFileSync(path.join(dumpDir, 'parsed-curriculum.json'), 'utf8')),
-    mde171: JSON.parse(fs.readFileSync(path.join(dumpDir, 'parsed-sections.json'), 'utf8')),
-  };
+  let dumpDir = null;
+  if (fs.existsSync('dumps')) {
+    const list = fs.readdirSync('dumps').map((d) => path.join('dumps', d)).sort();
+    if (list.length) dumpDir = list.pop();
+  }
+
+  if (dumpDir && fs.existsSync(path.join(dumpDir, 'parsed-registrations.json'))) {
+    data = {
+      registrations: JSON.parse(fs.readFileSync(path.join(dumpDir, 'parsed-registrations.json'), 'utf8')),
+      curriculum: JSON.parse(fs.readFileSync(path.join(dumpDir, 'parsed-curriculum.json'), 'utf8')),
+      mde171: JSON.parse(fs.readFileSync(path.join(dumpDir, 'parsed-sections.json'), 'utf8')),
+    };
+  } else {
+    data = {
+      registrations: { term: '2026 - 2027 Fall', isApproved: true, track: { id: 'demo', name: 'Demo Track' }, progTrack: 'TRACK0', approved: [] },
+      curriculum: { program: { title: 'Demo Program', year: 2026, name: 'Computer Science', track: 'Main' }, semesters: [] },
+      mde171: { course: { code: 'MDE 171', name: 'Demo Course', hours: '2+1+0', ects: 5 }, depCode: 'MDE', progCode: 'IS', theory: [], practice: [], lab: [] },
+    };
+  }
   return data;
 }
 

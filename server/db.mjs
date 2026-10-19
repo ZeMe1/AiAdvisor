@@ -1,5 +1,4 @@
 import pg from 'pg';
-import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
@@ -25,6 +24,7 @@ const rawPool = new Pool(connectionString ? {
   port: Number(process.env.PGPORT) || 5432,
 });
 
+<<<<<<< HEAD
 rawPool.on('error', (err) => {
   // Suppress uncaught error events so process does not terminate
   console.error('[db] pg pool error:', err.message);
@@ -445,16 +445,54 @@ export async function initDb() {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255),
         display_name VARCHAR(255),
         avatar_url TEXT,
         role VARCHAR(50) DEFAULT 'Student',
         is_blocked BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `);
 
-    await rawPool.query(`
+      ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        id VARCHAR(64) PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        username VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        status VARCHAR(50) NOT NULL,
+        sdu_jar JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '7 days')
+      );
+      CREATE INDEX IF NOT EXISTS idx_sessions_username ON sessions(username);
+      CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+      CREATE TABLE IF NOT EXISTS student_data_cache (
+        username VARCHAR(255) PRIMARY KEY,
+        term VARCHAR(100),
+        is_approved BOOLEAN DEFAULT false,
+        track JSONB,
+        prog_track VARCHAR(50),
+        approved_courses JSONB DEFAULT '[]'::jsonb,
+        basket_schedule JSONB DEFAULT '[]'::jsonb,
+        cached_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS curriculum_cache (
+        track_id VARCHAR(50) PRIMARY KEY,
+        curriculum JSONB NOT NULL,
+        sections_defaults JSONB,
+        cached_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS course_sections_cache (
+        cache_key VARCHAR(255) PRIMARY KEY,
+        data JSONB NOT NULL,
+        cached_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS courses (
         id SERIAL PRIMARY KEY,
         code VARCHAR(20) UNIQUE NOT NULL,
@@ -473,9 +511,7 @@ export async function initDb() {
       ALTER TABLE courses ADD COLUMN IF NOT EXISTS theory_teacher VARCHAR(255) DEFAULT '';
       ALTER TABLE courses ADD COLUMN IF NOT EXISTS practice_teacher VARCHAR(255) DEFAULT '';
       ALTER TABLE courses ADD COLUMN IF NOT EXISTS quota INTEGER DEFAULT 30;
-    `);
 
-    await rawPool.query(`
       CREATE TABLE IF NOT EXISTS prerequisites (
         id SERIAL PRIMARY KEY,
         course_code VARCHAR(50) NOT NULL,
@@ -485,9 +521,7 @@ export async function initDb() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT unique_prereq_link UNIQUE (course_code, prereq_code)
       );
-    `);
 
-    await rawPool.query(`
       CREATE TABLE IF NOT EXISTS student_transcripts (
         id SERIAL PRIMARY KEY,
         username VARCHAR(255) NOT NULL,
@@ -504,12 +538,10 @@ export async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_transcripts_course ON student_transcripts(course_code);
     `);
 
-    console.log('[db] PostgreSQL connected and tables initialized.');
+    console.log('[db] PostgreSQL connected and tables initialized with sessions & caching.');
   } catch (err) {
     usePg = false;
     ensureDataFile();
     console.warn(`[db] PostgreSQL not accessible (${err.message}). Using local JSON storage (.data/db.json).`);
   }
 }
-
-export { bcrypt };

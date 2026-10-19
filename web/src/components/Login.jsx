@@ -12,7 +12,7 @@ export default function Login({ onLogin, notice }) {
     setError(null);
     try {
       const r = await onLogin(username, password);
-      if (r.needs2fa) return; // переход на 2FA делает App
+      if (r?.status === '2fa_required' || r?.needs2fa) return;
     } catch (err) {
       setError(err.message);
     } finally {

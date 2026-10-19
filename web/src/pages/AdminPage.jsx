@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
+import { useAuthStore } from '../stores/authStore.js';
 
 /* ─── Users tab ────────────────────────────────────────────────────────── */
 
@@ -674,56 +676,74 @@ function PrerequisitesTab() {
   );
 }
 
-/* ─── Main AdminPanel with tabs ──────────────────────────────────────────── */
+/* ─── Main AdminPage with tabs ───────────────────────────────────────────── */
 
-export default function AdminPanel({ onBack }) {
+export default function AdminPage() {
+  const navigate = useNavigate();
+  const { profile } = useAuthStore();
   const [tab, setTab] = useState('courses');
 
+  if (profile && profile.role !== 'Administrator') {
+    return (
+      <main className="page">
+        <div className="card" style={{ maxWidth: 600, margin: '2rem auto', textAlign: 'center' }}>
+          <h2>Access Denied</h2>
+          <p className="muted">You do not have administrator permissions to access this page.</p>
+          <button className="btn btn-primary" onClick={() => navigate('/')}>
+            Back to Home
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <div className="card" style={{ maxWidth: 1100, margin: '2rem auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-        <button className="btn" onClick={onBack}>← Back</button>
-        <h2 style={{ margin: 0 }}>Admin Panel</h2>
-      </div>
+    <main className="page">
+      <div className="card" style={{ maxWidth: 1100, margin: '2rem auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+          <button className="btn" onClick={() => navigate('/')}>← Back</button>
+          <h2 style={{ margin: 0 }}>Admin Panel</h2>
+        </div>
 
-      {/* Tab bar */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: '1rem', borderBottom: '2px solid #c9d4e0' }}>
-        <button
-          onClick={() => setTab('courses')}
-          style={{
-            padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-            background: 'none', border: 'none',
-            borderBottom: tab === 'courses' ? '3px solid #005cb9' : '3px solid transparent',
-            color: tab === 'courses' ? '#005cb9' : '#6b7a8c',
-          }}
-        >
-          📚 Courses (Catalog)
-        </button>
-        <button
-          onClick={() => setTab('prerequisites')}
-          style={{
-            padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-            background: 'none', border: 'none',
-            borderBottom: tab === 'prerequisites' ? '3px solid #005cb9' : '3px solid transparent',
-            color: tab === 'prerequisites' ? '#005cb9' : '#6b7a8c',
-          }}
-        >
-          🔗 Prerequisites
-        </button>
-        <button
-          onClick={() => setTab('users')}
-          style={{
-            padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-            background: 'none', border: 'none',
-            borderBottom: tab === 'users' ? '3px solid #005cb9' : '3px solid transparent',
-            color: tab === 'users' ? '#005cb9' : '#6b7a8c',
-          }}
-        >
-          👥 Users
-        </button>
-      </div>
+        {/* Tab bar */}
+        <div style={{ display: 'flex', gap: 0, marginBottom: '1rem', borderBottom: '2px solid #c9d4e0' }}>
+          <button
+            onClick={() => setTab('courses')}
+            style={{
+              padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+              background: 'none', border: 'none',
+              borderBottom: tab === 'courses' ? '3px solid #005cb9' : '3px solid transparent',
+              color: tab === 'courses' ? '#005cb9' : '#6b7a8c',
+            }}
+          >
+            📚 Courses (Catalog)
+          </button>
+          <button
+            onClick={() => setTab('prerequisites')}
+            style={{
+              padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+              background: 'none', border: 'none',
+              borderBottom: tab === 'prerequisites' ? '3px solid #005cb9' : '3px solid transparent',
+              color: tab === 'prerequisites' ? '#005cb9' : '#6b7a8c',
+            }}
+          >
+            🔗 Prerequisites
+          </button>
+          <button
+            onClick={() => setTab('users')}
+            style={{
+              padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+              background: 'none', border: 'none',
+              borderBottom: tab === 'users' ? '3px solid #005cb9' : '3px solid transparent',
+              color: tab === 'users' ? '#005cb9' : '#6b7a8c',
+            }}
+          >
+            👥 Users
+          </button>
+        </div>
 
-      {tab === 'courses' ? <CoursesTab /> : tab === 'prerequisites' ? <PrerequisitesTab /> : <UsersTab />}
-    </div>
+        {tab === 'courses' ? <CoursesTab /> : tab === 'prerequisites' ? <PrerequisitesTab /> : <UsersTab />}
+      </div>
+    </main>
   );
 }
