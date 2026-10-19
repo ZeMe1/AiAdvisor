@@ -74,4 +74,29 @@ describe('API Integration & Validation Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body.id).toBe('42');
   });
+
+  it('GET /api/catalog returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/api/catalog');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /api/student/transcript returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/api/student/transcript');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /api/student/progress returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/api/student/progress');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /api/admin/courses returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/api/admin/courses');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /api/admin/prerequisites returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/api/admin/prerequisites');
+    expect(res.status).toBe(401);
+  });
 });
