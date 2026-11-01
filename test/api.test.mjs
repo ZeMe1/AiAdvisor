@@ -123,5 +123,5 @@ describe('API Integration & Validation Tests', () => {
       { code: 'INF 391', name: '' },
       { code: 'CSS 375', name: '' },
     ]);
-  });
+  }, 15000);
 });

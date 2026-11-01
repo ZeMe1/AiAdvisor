@@ -25,7 +25,15 @@ export default function Navbar() {
         {me?.demo && <span className="demo-badge">demo data</span>}
       </span>
 
-      <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+      <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <button
+          className="btn btn-ghost"
+          style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+          onClick={() => navigate('/roadmap')}
+        >
+          🗺 Roadmap
+        </button>
+
         {profile?.role === 'Administrator' && (
           <button className="btn" onClick={() => navigate('/admin')}>
             Admin Panel
