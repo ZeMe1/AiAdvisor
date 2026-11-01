@@ -101,7 +101,9 @@ describe('US13: Manage Groups and Assign Advisors', () => {
       study_year: 3,
     });
 
-    // 1. Enroll students
+    // 1. Enroll students (ensure users exist first)
+    await userRepository.findOrCreateUser('test_student_enroll1');
+    await userRepository.findOrCreateUser('test_student_enroll2');
     await groupService.enrollStudent(group.id, 'test_student_enroll1');
     await groupService.enrollStudent(group.id, 'test_student_enroll2');
 
@@ -116,6 +118,13 @@ describe('US13: Manage Groups and Assign Advisors', () => {
     expect(members).toHaveLength(1);
     expect(members[0].username).toBe('test_student_enroll2');
   }, 15000);
+
+  it('fails with 400 when enrolling a non-existent user into a group', async () => {
+    const group = await groupRepository.findGroupByName('TEST-CS-MEMBERS');
+    await expect(
+      groupService.enrollStudent(group.id, 'test_nonexistent_student_ghost')
+    ).rejects.toThrow(/does not exist on the platform/);
+  });
 
   it('fails with 400 when assigning a non-existent advisor', async () => {
     const group = await groupRepository.findGroupByName('TEST-CS-23-1');

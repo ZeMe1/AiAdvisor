@@ -35,6 +35,7 @@ export default function AdminPage() {
   const [groupMembers, setGroupMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [studentInput, setStudentInput] = useState('');
+  const [enrollError, setEnrollError] = useState('');
   const [enrolling, setEnrolling] = useState(false);
 
   // Confirmation Modal state
@@ -189,6 +190,7 @@ export default function AdminPage() {
   async function openStudentsModal(group) {
     setSelectedGroup(group);
     setStudentInput('');
+    setEnrollError('');
     setLoadingMembers(true);
     try {
       const members = await api.adminGetGroupMembers(group.id);
@@ -207,6 +209,7 @@ export default function AdminPage() {
     if (!username || !selectedGroup) return;
 
     setEnrolling(true);
+    setEnrollError('');
     try {
       const updatedMembers = await api.adminEnrollStudent(selectedGroup.id, username);
       setGroupMembers(updatedMembers);
@@ -216,6 +219,7 @@ export default function AdminPage() {
       );
       toast.success(`Student ${username} added to group ${selectedGroup.name}`);
     } catch (e) {
+      setEnrollError(e.message);
       toast.error('Failed to add student: ' + e.message);
     } finally {
       setEnrolling(false);
@@ -608,6 +612,23 @@ export default function AdminPage() {
                 {enrolling ? 'Adding...' : '+ Add Student'}
               </button>
             </form>
+
+            {enrollError && (
+              <div
+                style={{
+                  backgroundColor: '#fce8e6',
+                  color: '#c5221f',
+                  border: '1px solid #f5c6cb',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  marginBottom: '1rem',
+                  fontWeight: 500,
+                }}
+              >
+                ⚠️ {enrollError}
+              </div>
+            )}
 
             {/* Table of enrolled students */}
             {loadingMembers ? (

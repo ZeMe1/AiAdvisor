@@ -79,7 +79,11 @@ export class GroupService {
     const cleanUsername = String(username).trim();
     if (!cleanUsername) throw HttpError.badRequest('Username cannot be empty');
 
-    await userRepository.findOrCreateUser(cleanUsername);
+    const user = await userRepository.findByUsername(cleanUsername);
+    if (!user) {
+      throw HttpError.badRequest(`User '${cleanUsername}' does not exist on the platform`);
+    }
+
     await groupRepository.enrollStudent(groupId, cleanUsername);
     return groupRepository.listGroupMembers(groupId);
   }
