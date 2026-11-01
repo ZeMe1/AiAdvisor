@@ -68,7 +68,12 @@ export const useScheduleStore = create((set, get) => ({
 
   initForUser: (username) => {
     if (!username) return;
-    if (get().curriculumUser === username && get().curriculum) return;
+    if (get().curriculumUser === username) {
+      if (get().curriculum) return;
+      const cached = loadInitialCurriculumCache(username);
+      if (cached) set({ curriculum: cached });
+      return;
+    }
     const cached = loadInitialCurriculumCache(username);
     set({
       curriculumUser: username,
@@ -98,7 +103,7 @@ export const useScheduleStore = create((set, get) => ({
 
   loadCurriculum: async (force = false) => {
     const authState = useAuthStore.getState();
-    const currentUsername = authState.profile?.username || authState.me?.user?.username || authState.me?.username;
+    const currentUsername = authState.profile?.username || authState.me?.user?.username || authState.me?.username || get().curriculumUser;
 
     // If already loaded for the current user and not forced, return cached in memory
     if (!force && get().curriculum && (!currentUsername || get().curriculumUser === currentUsername)) {
@@ -118,7 +123,7 @@ export const useScheduleStore = create((set, get) => ({
     try {
       const curriculum = await api.curriculum();
       persistCurriculumCache(currentUsername, curriculum);
-      set({ curriculum, curriculumUser: currentUsername, loadingCurriculum: false });
+      set({ curriculum, curriculumUser: currentUsername || get().curriculumUser, loadingCurriculum: false });
       return curriculum;
     } catch (err) {
       set({ loadingCurriculum: false });

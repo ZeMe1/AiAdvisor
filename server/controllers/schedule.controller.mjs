@@ -6,6 +6,10 @@ export class ScheduleController {
   async getMe(req, res) {
     const forceRefresh = req.query.refresh === '1';
     const data = await scheduleService.getMe(req.client, forceRefresh);
+    const username = req.client?.localUsername || req.session?.username;
+    if (data && username && (!data.user || !data.user.username)) {
+      data.user = { ...(data.user || {}), username };
+    }
     res.json(data);
   }
 

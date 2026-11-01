@@ -13,7 +13,7 @@ export default function HomePage() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const { me } = useAuthStore();
+  const { me, profile } = useAuthStore();
   const { plan, dropFromPlan } = usePlanStore();
   const { curriculum, loadingCurriculum, loadCurriculum, loadEligibility, getScheduleChips } = useScheduleStore();
 
@@ -22,12 +22,14 @@ export default function HomePage() {
   const toastRef = React.useRef(toast);
   toastRef.current = toast;
 
+  const currentUsername = profile?.username || me?.user?.username || me?.username;
+
   useEffect(() => {
     loadCurriculum(true).catch((err) => {
       toastRef.current.error('Failed to load curriculum: ' + err.message);
     });
     loadEligibility().catch(console.error);
-  }, [loadCurriculum, loadEligibility]);
+  }, [currentUsername, loadCurriculum, loadEligibility]);
 
   const chips = getScheduleChips(false);
   const hasConflict = chips.some((c) => c.conflict);
@@ -115,7 +117,14 @@ export default function HomePage() {
         </section>
       ) : curriculum ? (
         <Curriculum curriculum={curriculum} onChoose={handleChoose} />
-      ) : null}
+      ) : (
+        <section className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+          <p className="muted">Curriculum not loaded yet.</p>
+          <button className="btn btn-primary" style={{ marginTop: '0.5rem' }} onClick={() => loadCurriculum(true)}>
+            Load Curriculum
+          </button>
+        </section>
+      )}
     </main>
   );
 }

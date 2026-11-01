@@ -17,13 +17,11 @@ export const useAuthStore = create((set, get) => ({
   checkAuth: async () => {
     try {
       const me = await api.me();
-      set({ me, stage: 'main', error: null });
 
       let profileData = null;
       if (!me.demo) {
         try {
           profileData = await api.profile();
-          set({ profile: profileData });
         } catch (e) {
           console.error('[authStore] Failed to fetch profile:', e);
         }
@@ -34,6 +32,8 @@ export const useAuthStore = create((set, get) => ({
         useScheduleStore.getState().initForUser?.(activeUser);
         usePlanStore.getState().initForUser?.(activeUser);
       }
+
+      set({ me, profile: profileData, stage: 'main', error: null });
     } catch {
       set({ stage: 'login', me: null, profile: null });
     }
@@ -44,7 +44,7 @@ export const useAuthStore = create((set, get) => ({
     useScheduleStore.getState().clearAllCache?.();
     usePlanStore.getState().resetStore?.();
 
-    set({ busy: true, error: null, loginNotice: null });
+    set({ busy: true, error: null, loginNotice: null, me: null, profile: null });
     try {
       const res = await api.login(username, password);
       if (res.status === '2fa_required') {
@@ -73,11 +73,7 @@ export const useAuthStore = create((set, get) => ({
   },
 
   logout: async () => {
-    try {
-      await api.logout();
-    } catch {
-      // ignore logout network errors
-    }
+    // Clear user state immediately to avoid flashing previous user's data
     useScheduleStore.getState().clearAllCache?.();
     usePlanStore.getState().resetStore?.();
     try {
@@ -86,6 +82,12 @@ export const useAuthStore = create((set, get) => ({
       localStorage.removeItem('zeme_plan_v1');
     } catch {}
     set({ stage: 'login', me: null, profile: null, loginNotice: null, error: null });
+
+    try {
+      await api.logout();
+    } catch {
+      // ignore logout network errors
+    }
   },
 
   updateProfile: async (data) => {

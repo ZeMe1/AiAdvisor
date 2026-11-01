@@ -7,12 +7,14 @@ import EligibilityBadge from '../shared/ui/EligibilityBadge.jsx';
 
 export default function RoadmapPage() {
   const navigate = useNavigate();
-  const { me } = useAuthStore();
+  const { me, profile } = useAuthStore();
   const { curriculum, loadCurriculum, eligibilityMap, loadEligibility } = useScheduleStore();
 
   const [roadmapList, setRoadmapList] = useState([]);
   const [selectedCurriculumId, setSelectedCurriculumId] = useState('sdu');
   const [selectedCourse, setSelectedCourse] = useState(null);
+
+  const currentUsername = profile?.username || me?.user?.username || me?.username;
 
   useEffect(() => {
     let mounted = true;
@@ -29,14 +31,14 @@ export default function RoadmapPage() {
         console.warn('[Roadmap] Fallback to default curriculum:', err.message);
       });
     return () => { mounted = false; };
-  }, []);
+  }, [currentUsername]);
 
   useEffect(() => {
     loadCurriculum(true).catch(console.error);
     if (!eligibilityMap || Object.keys(eligibilityMap).length === 0) {
       loadEligibility().catch(console.error);
     }
-  }, [loadCurriculum, eligibilityMap, loadEligibility]);
+  }, [currentUsername, loadCurriculum, eligibilityMap, loadEligibility]);
 
   const activeCurriculum = useMemo(() => {
     if (roadmapList.length > 0) {
