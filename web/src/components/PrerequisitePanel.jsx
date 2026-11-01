@@ -23,7 +23,7 @@ export default function PrerequisitePanel({ eligibility }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <EligibilityBadge status="eligible" />
           <span style={{ fontSize: '0.9rem', color: '#137333', fontWeight: 500 }}>
-            Все необходимые пререквизиты выполнены. Курс доступен для регистрации.
+            All prerequisites are satisfied. Course is eligible for registration.
           </span>
         </div>
       </div>
@@ -44,7 +44,7 @@ export default function PrerequisitePanel({ eligibility }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <EligibilityBadge status="corequisite" />
           <span style={{ fontSize: '0.9rem', color: '#b06000', fontWeight: 500 }}>
-            {reason || 'Кореквизит: предмет может изучаться параллельно.'}
+            {reason || 'Corequisite: course can be taken concurrently.'}
           </span>
         </div>
       </div>
@@ -65,12 +65,12 @@ export default function PrerequisitePanel({ eligibility }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
           <EligibilityBadge status="not_eligible" missingCount={missingPrerequisites.length} />
           <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#c5221f' }}>
-            Курс недоступен: не закрыты пререквизиты
+            Course is not eligible: prerequisites not satisfied
           </span>
         </div>
 
         <p style={{ margin: '4px 0 12px 0', fontSize: '0.85rem', color: '#5f6368' }}>
-          Для записи на данный курс необходимо предварительно завершить следующие дисциплины:
+          The following prerequisite courses must be completed before taking this course:
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -89,7 +89,7 @@ export default function PrerequisitePanel({ eligibility }) {
             >
               <div>
                 <strong style={{ color: '#202124', marginRight: '8px' }}>{m.code}</strong>
-                <span className="muted small">Минимальная оценка: <b>{m.minGrade || 'D'}</b></span>
+                <span className="muted small">Minimum grade: <b>{m.minGrade || 'D'}</b></span>
                 {m.reason && <div className="muted small" style={{ color: '#d93025' }}>{m.reason}</div>}
               </div>
               <button
@@ -97,7 +97,7 @@ export default function PrerequisitePanel({ eligibility }) {
                 style={{ fontSize: '0.8rem', padding: '4px 10px' }}
                 onClick={() => navigate(`/courses/${encodeURIComponent(m.code)}`)}
               >
-                Перейти к {m.code} →
+                View {m.code} →
               </button>
             </div>
           ))}

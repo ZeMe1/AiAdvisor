@@ -25,7 +25,7 @@ function CourseRow({ course, index, onChoose, eligibility }) {
         <div>{course.name}</div>
         {course.isElective && course.elective && (
           <div className="small muted">
-            элективная группа · {course.elective.candidateCodes.length} курсов на выбор
+            elective group · {course.elective.candidateCodes.length} elective courses
           </div>
         )}
       </td>
@@ -45,7 +45,7 @@ function CourseRow({ course, index, onChoose, eligibility }) {
         {chooseable && (
           <button
             className="btn"
-            title={!isEligible ? 'Не выполнены пререквизиты' : undefined}
+            title={!isEligible ? 'Prerequisites not satisfied' : undefined}
             onClick={() => onChoose(course)}
           >
             Choose
@@ -93,7 +93,7 @@ export default function Curriculum({ curriculum, onChoose }) {
                 ))}
               </tbody>
             </table>
-            <div className="sum-ects">Семестр {sem.no} · Sum ECTS: <b>{sumEcts}</b></div>
+            <div className="sum-ects">Semester {sem.no} · Sum ECTS: <b>{sumEcts}</b></div>
           </div>
         );
       })}

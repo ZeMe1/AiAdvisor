@@ -1,7 +1,7 @@
 /** Утилиты сетки расписания: слоты 08:30..21:30 по 50 минут, дни Mo..Sa. */
 
 export const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-export const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const SLOT_START_HOUR = 8; // первый слот 08:30
 export const SLOT_COUNT = 14; // 08:30 .. 21:30
 

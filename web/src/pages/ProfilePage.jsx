@@ -18,12 +18,12 @@ export default function ProfilePage() {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Пожалуйста, выберите изображение');
+      toast.error('Please select an image file');
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Размер файла не должен превышать 5 MB');
+      toast.error('File size cannot exceed 5 MB');
       return;
     }
 
@@ -65,9 +65,9 @@ export default function ProfilePage() {
     setBusy(true);
     try {
       await updateProfile({ display_name: name, avatar_url: avatar });
-      toast.success('Профиль успешно обновлен!');
+      toast.success('Profile successfully updated!');
     } catch (e) {
-      toast.error('Ошибка сохранения профиля: ' + e.message);
+      toast.error('Failed to save profile: ' + e.message);
     } finally {
       setBusy(false);
     }
@@ -77,8 +77,8 @@ export default function ProfilePage() {
     <main className="page">
       <div className="card" style={{ maxWidth: 640, margin: '2rem auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-          <button className="btn" onClick={() => navigate('/')}>← Назад</button>
-          <h2 style={{ margin: 0 }}>Мой профиль</h2>
+          <button className="btn" onClick={() => navigate('/')}>← Back</button>
+          <h2 style={{ margin: 0 }}>My Profile</h2>
         </div>
 
         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
@@ -114,11 +114,11 @@ export default function ProfilePage() {
             />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
               <button className="btn" onClick={() => fileInputRef.current?.click()}>
-                Загрузить фото
+                Upload photo
               </button>
               {avatar && (
                 <button className="btn btn-danger" onClick={() => setAvatar('')}>
-                  Удалить фото
+                  Delete photo
                 </button>
               )}
             </div>
@@ -132,23 +132,23 @@ export default function ProfilePage() {
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label className="small muted">Роль</label>
+              <label className="small muted">Role</label>
               <input value={profile?.role || 'Student'} disabled style={{ width: '100%', marginTop: '0.5rem' }} />
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label className="small muted">Отображаемое имя</label>
+              <label className="small muted">Display Name</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Введите ваше имя"
+                placeholder="Enter your name"
                 style={{ width: '100%', marginTop: '0.5rem' }}
               />
             </div>
 
             <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
               <button className="btn btn-primary" disabled={busy} onClick={handleSave}>
-                {busy ? 'Сохранение...' : 'Сохранить изменения'}
+                {busy ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>

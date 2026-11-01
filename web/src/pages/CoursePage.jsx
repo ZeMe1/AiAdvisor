@@ -42,7 +42,7 @@ export default function CoursePage() {
     if (/^XXX/i.test(decodedCode)) return;
 
     loadCourse(decodedCode, mufSqId).catch((err) => {
-      toastRef.current.error('Ошибка загрузки курса: ' + err.message);
+      toastRef.current.error('Failed to load course: ' + err.message);
     });
 
     if (!eligibilityMap || Object.keys(eligibilityMap).length === 0) {
@@ -58,9 +58,9 @@ export default function CoursePage() {
     return (
       <main className="page">
         <div className="card">
-          <button className="btn" onClick={() => navigate('/')}>← Назад к куррикулуму</button>
+          <button className="btn" onClick={() => navigate('/')}>← Back to curriculum</button>
           <div className="banner-warn" style={{ marginTop: '16px' }}>
-            Код <b>{decodedCode}</b> обозначает группу элективов. Пожалуйста, выберите конкретный курс из предложенных вариантов в куррикулуме.
+            Code <b>{decodedCode}</b> indicates an elective group. Please choose a specific course from the curriculum.
           </div>
         </div>
       </main>
@@ -71,7 +71,7 @@ export default function CoursePage() {
     return (
       <main className="page">
         <div className="card">
-          <p className="muted">Загрузка информации о секциях курса {code}…</p>
+          <p className="muted">Loading section info for {code}…</p>
         </div>
       </main>
     );
@@ -81,9 +81,9 @@ export default function CoursePage() {
     return (
       <main className="page">
         <div className="card">
-          <button className="btn" onClick={() => navigate('/')}>← Назад</button>
+          <button className="btn" onClick={() => navigate('/')}>← Back</button>
           <div className="banner-error" style={{ marginTop: '12px' }}>
-            {courseError || 'Курс не найден'}
+            {courseError || 'Course not found'}
           </div>
         </div>
       </main>
@@ -117,7 +117,7 @@ export default function CoursePage() {
 
   const handleAdd = () => {
     if (isNotEligible) {
-      toast.error('Нельзя добавить курс в план: не выполнены пререквизиты!');
+      toast.error('Cannot add to plan: prerequisites not satisfied!');
       return;
     }
     addToPlan({
@@ -127,14 +127,14 @@ export default function CoursePage() {
       practice,
       lab,
     });
-    toast.success(`Курс ${openCourse.code} успешно добавлен в план!`);
+    toast.success(`Course ${openCourse.code} successfully added to plan!`);
     navigate('/');
   };
 
   return (
     <main className="page">
       <div className="course-topline">
-        <button className="btn" onClick={() => navigate('/')}>← К списку курсов</button>
+        <button className="btn" onClick={() => navigate('/')}>← Back to courses</button>
         <h2 className="course-title" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
           <span>{openCourse.code} — {openCourse.name || '?'}</span>
           <span className="muted"> [{data.course.hours}] / {data.course.ects} ects</span>
@@ -152,7 +152,7 @@ export default function CoursePage() {
       <PrerequisitePanel eligibility={courseEligibility} />
 
       <section className="card">
-        <h2>Шаг 1 · Theory (Lecture) sections <span className="muted small">— выберите лекцию</span></h2>
+        <h2>Step 1 · Theory (Lecture) sections <span className="muted small">— select lecture</span></h2>
         <SectionTable
           kind="N"
           sections={data.theory}
@@ -164,9 +164,9 @@ export default function CoursePage() {
       {theory && data.practice.length > 0 && (
         <section className="card">
           <h2>
-            Шаг 2 · Practice sections{' '}
+            Step 2 · Practice sections{' '}
             <span className="muted small">
-              {ownPractices ? '— практики выбранной лекции' : '— у этой лекции нет привязанных практик, показаны все'}
+              {ownPractices ? '— practice sections for selected lecture' : '— no practices linked to this lecture, showing all'}
             </span>
           </h2>
           <SectionTable
@@ -179,16 +179,16 @@ export default function CoursePage() {
             <button
               className="btn btn-primary"
               disabled={!canAdd || isNotEligible}
-              title={isNotEligible ? 'Не выполнены пререквизиты' : undefined}
+              title={isNotEligible ? 'Prerequisites not satisfied' : undefined}
               onClick={handleAdd}
             >
               add to plan
             </button>
-            <span className="muted small">Добавление никуда не записывается в SDU — это только ваш план.</span>
+            <span className="muted small">Saved locally — this is your private study plan.</span>
           </div>
           {isNotEligible && (
             <div className="banner-warn" style={{ marginTop: '8px' }}>
-              ⚠ Запись на курс заблокирована: не выполнены обязательные пререквизиты.
+              ⚠ Registration blocked: prerequisite requirements not satisfied.
             </div>
           )}
         </section>
@@ -199,15 +199,15 @@ export default function CoursePage() {
           <button
             className="btn btn-primary"
             disabled={isNotEligible}
-            title={isNotEligible ? 'Не выполнены пререквизиты' : undefined}
+            title={isNotEligible ? 'Prerequisites not satisfied' : undefined}
             onClick={handleAdd}
           >
             add to plan
           </button>
-          <span className="muted small">У курса нет практик — добавляем только лекцию.</span>
+          <span className="muted small">This course has no practice sections — lecture only.</span>
           {isNotEligible && (
             <div className="banner-warn" style={{ marginTop: '8px' }}>
-              ⚠ Запись на курс заблокирована: не выполнены обязательные пререквизиты.
+              ⚠ Registration blocked: prerequisite requirements not satisfied.
             </div>
           )}
         </div>
@@ -227,7 +227,7 @@ export default function CoursePage() {
 
       {conflict && (
         <div className="banner-warn">
-          ⚠ Выбранные слоты пересекаются по времени с корзиной или другими курсами плана — они обведены красным на сетке.
+          ⚠ Selected slots conflict with basket or planned courses — highlighted in red on the grid.
         </div>
       )}
 

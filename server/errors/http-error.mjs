@@ -9,7 +9,7 @@ export class HttpError extends Error {
     this.sessionExpired = sessionExpired;
   }
 
-  static badRequest(message = 'Неверный запрос') {
+  static badRequest(message = 'Bad request') {
     return new HttpError(400, message);
   }
 
@@ -17,19 +17,19 @@ export class HttpError extends Error {
     return new HttpError(401, message);
   }
 
-  static sessionExpired(message = 'Сессия портала истекла — войдите заново') {
+  static sessionExpired(message = 'Portal session expired — please log in again') {
     return new HttpError(401, message, { sessionExpired: true });
   }
 
-  static forbidden(message = 'Доступ запрещен') {
+  static forbidden(message = 'Access denied') {
     return new HttpError(403, message);
   }
 
-  static notFound(message = 'Ресурс не найден') {
+  static notFound(message = 'Resource not found') {
     return new HttpError(404, message);
   }
 
-  static badGateway(message = 'Ошибка взаимодействия с внешним сервисом') {
+  static badGateway(message = 'Upstream service error') {
     return new HttpError(502, message);
   }
 }

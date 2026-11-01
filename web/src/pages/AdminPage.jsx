@@ -34,7 +34,7 @@ export default function AdminPage() {
       const data = await api.adminGetUsers();
       setUsers(data);
     } catch (e) {
-      toast.error('Ошибка загрузки пользователей: ' + e.message);
+      toast.error('Failed to load users: ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -43,16 +43,16 @@ export default function AdminPage() {
   function handleRoleChange(username, newRole) {
     setModalConfig({
       isOpen: true,
-      title: 'Смена роли пользователя',
-      message: `Вы уверены, что хотите изменить роль пользователя ${username} на ${newRole}?`,
-      confirmText: 'Изменить роль',
+      title: 'Change User Role',
+      message: `Are you sure you want to change the role of user ${username} to ${newRole}?`,
+      confirmText: 'Change Role',
       isDanger: false,
       onConfirm: async () => {
         setModalConfig((prev) => ({ ...prev, isOpen: false }));
         try {
           const updated = await api.adminUpdateRole(username, newRole);
           setUsers((prev) => prev.map((u) => (u.username === username ? { ...u, role: updated.role } : u)));
-          toast.success(`Роль пользователя ${username} изменена на ${newRole}`);
+          toast.success(`Role of ${username} changed to ${newRole}`);
         } catch (e) {
           toast.error(e.message);
         }
@@ -61,19 +61,19 @@ export default function AdminPage() {
   }
 
   function handleBlockToggle(username, currentStatus) {
-    const action = currentStatus ? 'разблокировать' : 'заблокировать';
+    const action = currentStatus ? 'unblock' : 'block';
     setModalConfig({
       isOpen: true,
-      title: currentStatus ? 'Разблокировка пользователя' : 'Блокировка пользователя',
-      message: `Вы уверены, что хотите ${action} пользователя ${username}? При блокировке все его активные сессии будут немедленно отозваны.`,
-      confirmText: currentStatus ? 'Разблокировать' : 'Заблокировать',
+      title: currentStatus ? 'Unblock User' : 'Block User',
+      message: `Are you sure you want to ${action} user ${username}? All active sessions will be revoked.`,
+      confirmText: currentStatus ? 'Unblock' : 'Block',
       isDanger: !currentStatus,
       onConfirm: async () => {
         setModalConfig((prev) => ({ ...prev, isOpen: false }));
         try {
           const updated = await api.adminBlockUser(username, !currentStatus);
           setUsers((prev) => prev.map((u) => (u.username === username ? { ...u, is_blocked: updated.is_blocked } : u)));
-          toast.success(`Пользователь ${username} успешно ${currentStatus ? 'разблокирован' : 'заблокирован'}`);
+          toast.success(`User ${username} successfully ${currentStatus ? 'unblocked' : 'blocked'}`);
         } catch (e) {
           toast.error(e.message);
         }
@@ -95,10 +95,10 @@ export default function AdminPage() {
     return (
       <main className="page">
         <div className="card" style={{ maxWidth: 600, margin: '2rem auto', textAlign: 'center' }}>
-          <h2>Доступ ограничен</h2>
-          <p className="muted">У вас нет прав администратора для просмотра этой страницы.</p>
+          <h2>Access Restricted</h2>
+          <p className="muted">You do not have administrator privileges to view this page.</p>
           <button className="btn btn-primary" onClick={() => navigate('/')}>
-            Вернуться на главную
+            Return to Home
           </button>
         </div>
       </main>
@@ -109,13 +109,13 @@ export default function AdminPage() {
     <main className="page">
       <div className="card" style={{ maxWidth: 1040, margin: '2rem auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-          <button className="btn" onClick={() => navigate('/')}>← Назад</button>
-          <h2 style={{ margin: 0 }}>Админ-панель (Управление пользователями)</h2>
+          <button className="btn" onClick={() => navigate('/')}>← Back</button>
+          <h2 style={{ margin: 0 }}>Admin Panel (User Management)</h2>
         </div>
 
         <div style={{ marginBottom: '1.2rem' }}>
           <input
-            placeholder="Поиск по логину или имени..."
+            placeholder="Search by username or name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ width: '100%', maxWidth: 400 }}
@@ -123,24 +123,24 @@ export default function AdminPage() {
         </div>
 
         {loading ? (
-          <p className="muted">Загрузка списка пользователей...</p>
+          <p className="muted">Loading user list...</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="tbl">
               <thead>
                 <tr>
                   <th>Username</th>
-                  <th>Имя (Display Name)</th>
-                  <th>Дата регистрации</th>
-                  <th>Роль</th>
-                  <th>Статус</th>
-                  <th>Действия</th>
+                  <th>Display Name</th>
+                  <th>Registration Date</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.length === 0 && (
                   <tr>
-                    <td colSpan="6" className="c muted">Ничего не найдено</td>
+                    <td colSpan="6" className="c muted">No users found</td>
                   </tr>
                 )}
                 {filteredUsers.map((u) => (
@@ -172,7 +172,7 @@ export default function AdminPage() {
                         onClick={() => handleBlockToggle(u.username, u.is_blocked)}
                         style={{ padding: '2px 8px', fontSize: '11px' }}
                       >
-                        {u.is_blocked ? 'Разблокировать' : 'Заблокировать'}
+                        {u.is_blocked ? 'Unblock' : 'Block'}
                       </button>
                     </td>
                   </tr>

@@ -6,7 +6,7 @@ function Chip({ c }) {
     <div
       className={`chip chip-${c.color}${c.conflict ? ' chip-conflict' : ''}${c.onClick ? ' chip-clickable' : ''}`}
       onClick={c.onClick}
-      title={`${c.label}${c.teacher ? ' · ' + c.teacher : ''}${c.conflict ? ' · КОНФЛИКТ' : ''}`}
+      title={`${c.label}${c.teacher ? ' · ' + c.teacher : ''}${c.conflict ? ' · CONFLICT' : ''}`}
     >
       {c.label}
     </div>
@@ -25,7 +25,7 @@ export default function ScheduleGrid({ chips }) {
       <div className="legend">
         <span className="chip chip-basket">In basket</span>
         <span className="chip chip-sel">Selected</span>
-        <span className="chip chip-legend-conflict">Конфликт</span>
+        <span className="chip chip-legend-conflict">Conflict</span>
       </div>
       <div className="grid-wrap">
         <table className="grid">

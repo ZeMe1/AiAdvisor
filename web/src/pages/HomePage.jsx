@@ -24,7 +24,7 @@ export default function HomePage() {
 
   useEffect(() => {
     loadCurriculum().catch((err) => {
-      toastRef.current.error('Не удалось загрузить куррикулум: ' + err.message);
+      toastRef.current.error('Failed to load curriculum: ' + err.message);
     });
     loadEligibility().catch(console.error);
   }, [loadCurriculum, loadEligibility]);
@@ -36,7 +36,7 @@ export default function HomePage() {
     const trimmed = search.trim();
     if (!trimmed) return;
     if (/^XXX/i.test(trimmed)) {
-      toast.warn('Нельзя выполнить поиск по коду электива. Выберите конкретный курс.');
+      toast.warn('Cannot search by elective placeholder code. Please choose a specific course.');
       return;
     }
     navigate(`/courses/${encodeURIComponent(trimmed)}`);
@@ -49,7 +49,7 @@ export default function HomePage() {
         const mufSqId = course.elective.mufSqId;
         navigate(`/electives/${encodeURIComponent(course.code)}${mufSqId ? `?mufSqId=${encodeURIComponent(mufSqId)}` : ''}`, { state: { course } });
       } else {
-        toast.warn(`У элективной группы ${course.code} нет доступных вариантов в текущем плане.`);
+        toast.warn(`Elective group ${course.code} has no available options in current program.`);
       }
     } else {
       const mufSqId = course.sectionsParams?.mufSqId;
@@ -73,7 +73,7 @@ export default function HomePage() {
           </button>
         </div>
         <p className="muted small">
-          1 — поиск по коду · 2 — Choose в куррикулуме ниже · 3 — коды кандидатов у элективов
+          1 — search by course code · 2 — click Choose in curriculum below · 3 — candidate codes in electives
         </p>
       </section>
 
@@ -81,10 +81,10 @@ export default function HomePage() {
 
       <section className="card">
         <h2>
-          📝 Мой план <span className="muted small">(хранится локально, в SDU не отправляется)</span>
+          📝 My Plan <span className="muted small">(stored locally, not submitted to SDU)</span>
         </h2>
         {plan.length === 0 && (
-          <p className="muted">Пусто — выберите секции курса через Choose или поиск.</p>
+          <p className="muted">Empty — choose course sections via Choose or Search.</p>
         )}
         {plan.map((p) => (
           <div className="plan-row" key={p.code}>
@@ -104,14 +104,14 @@ export default function HomePage() {
         ))}
         {plan.length > 0 && hasConflict && (
           <div className="banner-warn">
-            ⚠ Есть пересечения по времени между курсами плана и/или корзиной — открой курс, чтобы увидеть детали на сетке.
+            ⚠ Schedule conflicts detected between planned courses and/or basket — open course to see details on the grid.
           </div>
         )}
       </section>
 
       {loadingCurriculum && !curriculum ? (
         <section className="card">
-          <p className="muted">Куррикулум загружается…</p>
+          <p className="muted">Loading curriculum…</p>
         </section>
       ) : curriculum ? (
         <Curriculum curriculum={curriculum} onChoose={handleChoose} />

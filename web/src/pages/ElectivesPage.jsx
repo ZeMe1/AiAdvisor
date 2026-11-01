@@ -83,7 +83,7 @@ export default function ElectivesPage() {
       } catch (err) {
         if (isMounted) {
           setError(err.message);
-          toast.warn('Не удалось загрузить курсы с портала — показаны коды из программы');
+          toast.warn('Could not load courses from portal — displaying program codes');
           // Никогда не разлогиниваем пользователя на ошибке элективов
           setList(candidateCodes.map((c) => ({ code: c, name: '' })));
         }
@@ -107,20 +107,20 @@ export default function ElectivesPage() {
   return (
     <main className="page">
       <div className="course-topline">
-        <button className="btn" onClick={() => navigate('/')}>← К списку курсов</button>
+        <button className="btn" onClick={() => navigate('/')}>← Back to courses</button>
         <h2 className="course-title">
-          Электив — {groupName}
-          <span className="muted"> · выберите курс из группы</span>
+          Elective — {groupName}
+          <span className="muted"> · choose course from group</span>
         </h2>
       </div>
 
       <Basket me={me} />
 
       <section className="card">
-        <h2>Курсы на выбор ({list.length})</h2>
-        {busy && <p className="muted">Загружаем список с портала…</p>}
+        <h2>Available courses ({list.length})</h2>
+        {busy && <p className="muted">Loading course list from portal…</p>}
         {!busy && error && (
-          <p className="banner-warn">Не удалось получить список с портала ({error}) — показаны коды из вашей программы.</p>
+          <p className="banner-warn">Could not fetch list from portal ({error}) — showing codes from your program.</p>
         )}
         <table className="tbl">
           <thead>
@@ -133,7 +133,7 @@ export default function ElectivesPage() {
               <tr key={c.code} className="st-not-taken">
                 <td className="dim c">{i + 1}</td>
                 <td className="code">{c.code}</td>
-                <td>{c.name || <span className="muted small">название появится на портале при выборе</span>}</td>
+                <td>{c.name || <span className="muted small">course title will be fetched upon selection</span>}</td>
                 <td className="c">{c.credits ?? '—'}</td>
                 <td className="c">{c.ects ?? '—'}</td>
                 <td className="c">
@@ -144,7 +144,7 @@ export default function ElectivesPage() {
             {list.length === 0 && !busy && (
               <tr>
                 <td colSpan={6} className="dim c" style={{ padding: '2rem' }}>
-                  Курсы для этой группы не найдены.
+                  No courses found for this group.
                 </td>
               </tr>
             )}

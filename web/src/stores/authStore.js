@@ -84,7 +84,7 @@ export const useAuthStore = create((set, get) => ({
         stage: 'login',
         me: null,
         profile: null,
-        loginNotice: 'Сессия портала истекла — войдите заново',
+        loginNotice: 'Portal session expired — please log in again',
       });
       return true;
     }

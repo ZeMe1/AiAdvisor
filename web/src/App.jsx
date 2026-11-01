@@ -20,7 +20,7 @@ export default function App() {
   }, [checkAuth]);
 
   if (stage === 'boot') {
-    return <div className="boot">Загрузка…</div>;
+    return <div className="boot">Loading…</div>;
   }
 
   if (stage === 'login') {

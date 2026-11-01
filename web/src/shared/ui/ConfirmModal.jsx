@@ -2,10 +2,10 @@ import React from 'react';
 
 export default function ConfirmModal({
   isOpen,
-  title = 'Подтверждение',
+  title = 'Confirmation',
   message,
-  confirmText = 'Подтвердить',
-  cancelText = 'Отмена',
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
   isDanger = false,
   onConfirm,
   onCancel,

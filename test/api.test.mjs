@@ -30,19 +30,19 @@ describe('API Integration & Validation Tests', () => {
   it('POST /api/auth/login fails with 400 on missing credentials (Zod validation)', async () => {
     const res = await request(app).post('/api/auth/login').send({});
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('username обязателен');
+    expect(res.body.error).toContain('username is required');
   });
 
   it('POST /api/auth/login fails with 400 on empty credentials', async () => {
     const res = await request(app).post('/api/auth/login').send({ username: '', password: '' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('username не может быть пустым');
+    expect(res.body.error).toContain('username cannot be empty');
   });
 
   it('POST /api/auth/2fa fails with 400 on malformed code (Zod regex)', async () => {
     const res = await request(app).post('/api/auth/2fa').send({ code: '123' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('ровно из 6 цифр');
+    expect(res.body.error).toContain('exactly 6 digits');
   });
 
   it('GET / non-API path returns index.html', async () => {
