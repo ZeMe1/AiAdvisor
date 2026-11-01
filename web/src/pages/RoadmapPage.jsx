@@ -20,13 +20,9 @@ export default function RoadmapPage() {
       .then((res) => {
         if (mounted && Array.isArray(res?.curriculums) && res.curriculums.length > 0) {
           setRoadmapList(res.curriculums);
-          // Prefer assigned admin curriculum if available, else first in list
-          const assigned = res.curriculums.find((c) => !c.is_default);
-          if (assigned) {
-            setSelectedCurriculumId(assigned.id);
-          } else {
-            setSelectedCurriculumId(res.curriculums[0].id);
-          }
+          // Default to the primary SDU portal curriculum
+          const defaultCurriculum = res.curriculums.find((c) => c.is_default || c.id === 'sdu') || res.curriculums[0];
+          setSelectedCurriculumId(defaultCurriculum.id);
         }
       })
       .catch((err) => {
