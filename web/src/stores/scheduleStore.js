@@ -55,6 +55,23 @@ export const useScheduleStore = create((set, get) => ({
 
   coursesCache: loadInitialCoursesCache(),
 
+  eligibilityMap: {},
+  loadingEligibility: false,
+
+  loadEligibility: async () => {
+    try {
+      set({ loadingEligibility: true });
+      const res = await api.eligibility();
+      const map = res?.courses || {};
+      set({ eligibilityMap: map, loadingEligibility: false });
+      return map;
+    } catch (err) {
+      console.warn('[scheduleStore] Failed to load eligibility, continuing gracefully:', err.message);
+      set({ loadingEligibility: false });
+      return get().eligibilityMap;
+    }
+  },
+
   openCourse: null, // { code, name, data }
   draft: NULL_DRAFT,
   loadingCourse: false,

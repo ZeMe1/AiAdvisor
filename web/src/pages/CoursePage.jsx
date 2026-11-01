@@ -3,6 +3,8 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import Basket from '../components/Basket.jsx';
 import SectionTable from '../components/SectionTable.jsx';
 import ScheduleGrid from '../components/ScheduleGrid.jsx';
+import PrerequisitePanel from '../components/PrerequisitePanel.jsx';
+import EligibilityBadge from '../shared/ui/EligibilityBadge.jsx';
 import { useAuthStore } from '../stores/authStore.js';
 import { usePlanStore } from '../stores/planStore.js';
 import { useScheduleStore } from '../stores/scheduleStore.js';
@@ -26,31 +28,39 @@ export default function CoursePage() {
     loadCourse,
     clearOpenCourse,
     getScheduleChips,
+    eligibilityMap,
+    loadEligibility,
   } = useScheduleStore();
 
   const toastRef = React.useRef(toast);
   toastRef.current = toast;
 
+  const decodedCode = code ? decodeURIComponent(code).trim() : '';
+
   useEffect(() => {
-    if (!code) return;
-    const decodedCode = decodeURIComponent(code);
+    if (!decodedCode) return;
     if (/^XXX/i.test(decodedCode)) return;
 
     loadCourse(decodedCode, mufSqId).catch((err) => {
       toastRef.current.error('Ошибка загрузки курса: ' + err.message);
     });
+
+    if (!eligibilityMap || Object.keys(eligibilityMap).length === 0) {
+      loadEligibility().catch(console.error);
+    }
+
     return () => {
       clearOpenCourse();
     };
-  }, [code, mufSqId, loadCourse, clearOpenCourse]);
+  }, [decodedCode, mufSqId, loadCourse, clearOpenCourse, eligibilityMap, loadEligibility]);
 
-  if (code && /^XXX/i.test(decodeURIComponent(code))) {
+  if (decodedCode && /^XXX/i.test(decodedCode)) {
     return (
       <main className="page">
         <div className="card">
           <button className="btn" onClick={() => navigate('/')}>← Назад к куррикулуму</button>
           <div className="banner-warn" style={{ marginTop: '16px' }}>
-            Код <b>{decodeURIComponent(code)}</b> обозначает группу элективов. Пожалуйста, выберите конкретный курс из предложенных вариантов в куррикулуме.
+            Код <b>{decodedCode}</b> обозначает группу элективов. Пожалуйста, выберите конкретный курс из предложенных вариантов в куррикулуме.
           </div>
         </div>
       </main>
@@ -99,10 +109,17 @@ export default function CoursePage() {
   const lab = data.lab?.find((s) => s.id === draft.L) ?? null;
   const canAdd = theory && (!practices || practices.length === 0 || practice);
 
+  const courseEligibility = eligibilityMap?.[decodedCode.toUpperCase()];
+  const isNotEligible = courseEligibility?.status === 'not_eligible';
+
   const chips = getScheduleChips(true);
   const conflict = chips.some((c) => c.conflict && c.color === 'sel');
 
   const handleAdd = () => {
+    if (isNotEligible) {
+      toast.error('Нельзя добавить курс в план: не выполнены пререквизиты!');
+      return;
+    }
     addToPlan({
       code: openCourse.code,
       name: openCourse.name,
@@ -118,13 +135,21 @@ export default function CoursePage() {
     <main className="page">
       <div className="course-topline">
         <button className="btn" onClick={() => navigate('/')}>← К списку курсов</button>
-        <h2 className="course-title">
-          {openCourse.code} — {openCourse.name || '?'}
+        <h2 className="course-title" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <span>{openCourse.code} — {openCourse.name || '?'}</span>
           <span className="muted"> [{data.course.hours}] / {data.course.ects} ects</span>
+          {courseEligibility && (
+            <EligibilityBadge
+              status={courseEligibility.status}
+              missingCount={courseEligibility.missingPrerequisites?.length}
+            />
+          )}
         </h2>
       </div>
 
       <Basket me={me} />
+
+      <PrerequisitePanel eligibility={courseEligibility} />
 
       <section className="card">
         <h2>Шаг 1 · Theory (Lecture) sections <span className="muted small">— выберите лекцию</span></h2>
@@ -151,18 +176,40 @@ export default function CoursePage() {
             onSelect={(id) => setDraft({ ...draft, P: id })}
           />
           <div className="panel-actions">
-            <button className="btn btn-primary" disabled={!canAdd} onClick={handleAdd}>
+            <button
+              className="btn btn-primary"
+              disabled={!canAdd || isNotEligible}
+              title={isNotEligible ? 'Не выполнены пререквизиты' : undefined}
+              onClick={handleAdd}
+            >
               add to plan
             </button>
             <span className="muted small">Добавление никуда не записывается в SDU — это только ваш план.</span>
           </div>
+          {isNotEligible && (
+            <div className="banner-warn" style={{ marginTop: '8px' }}>
+              ⚠ Запись на курс заблокирована: не выполнены обязательные пререквизиты.
+            </div>
+          )}
         </section>
       )}
 
       {theory && data.practice.length === 0 && (
         <div className="panel-actions card">
-          <button className="btn btn-primary" onClick={handleAdd}>add to plan</button>
+          <button
+            className="btn btn-primary"
+            disabled={isNotEligible}
+            title={isNotEligible ? 'Не выполнены пререквизиты' : undefined}
+            onClick={handleAdd}
+          >
+            add to plan
+          </button>
           <span className="muted small">У курса нет практик — добавляем только лекцию.</span>
+          {isNotEligible && (
+            <div className="banner-warn" style={{ marginTop: '8px' }}>
+              ⚠ Запись на курс заблокирована: не выполнены обязательные пререквизиты.
+            </div>
+          )}
         </div>
       )}
 

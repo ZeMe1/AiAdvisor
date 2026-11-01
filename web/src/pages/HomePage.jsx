@@ -15,7 +15,7 @@ export default function HomePage() {
 
   const { me } = useAuthStore();
   const { plan, dropFromPlan } = usePlanStore();
-  const { curriculum, loadingCurriculum, loadCurriculum, getScheduleChips } = useScheduleStore();
+  const { curriculum, loadingCurriculum, loadCurriculum, loadEligibility, getScheduleChips } = useScheduleStore();
 
   const [search, setSearch] = useState('');
 
@@ -26,7 +26,8 @@ export default function HomePage() {
     loadCurriculum().catch((err) => {
       toastRef.current.error('Не удалось загрузить куррикулум: ' + err.message);
     });
-  }, [loadCurriculum]);
+    loadEligibility().catch(console.error);
+  }, [loadCurriculum, loadEligibility]);
 
   const chips = getScheduleChips(false);
   const hasConflict = chips.some((c) => c.conflict);
