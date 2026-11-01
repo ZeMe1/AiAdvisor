@@ -94,6 +94,29 @@ describe('US13: Manage Groups and Assign Advisors', () => {
     expect(groupBMembers.some((m) => m.username === 'test_student_moving')).toBe(true);
   }, 15000);
 
+  it('manages students in a group: enrolls, lists, and removes students', async () => {
+    const group = await groupService.createGroup({
+      name: 'TEST-CS-MEMBERS',
+      program: 'Information Systems',
+      study_year: 3,
+    });
+
+    // 1. Enroll students
+    await groupService.enrollStudent(group.id, 'test_student_enroll1');
+    await groupService.enrollStudent(group.id, 'test_student_enroll2');
+
+    // 2. List members
+    let members = await groupService.listGroupMembers(group.id);
+    expect(members).toHaveLength(2);
+    expect(members.map((m) => m.username)).toContain('test_student_enroll1');
+    expect(members.map((m) => m.username)).toContain('test_student_enroll2');
+
+    // 3. Remove student
+    members = await groupService.removeStudent(group.id, 'test_student_enroll1');
+    expect(members).toHaveLength(1);
+    expect(members[0].username).toBe('test_student_enroll2');
+  }, 15000);
+
   it('fails with 400 when assigning a non-existent advisor', async () => {
     const group = await groupRepository.findGroupByName('TEST-CS-23-1');
     await expect(

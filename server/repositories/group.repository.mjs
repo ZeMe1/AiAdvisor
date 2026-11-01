@@ -128,6 +128,14 @@ export class GroupRepository {
     return rows;
   }
 
+  async removeStudent(groupId, username) {
+    const { rows } = await pool.query(
+      'DELETE FROM group_members WHERE group_id = $1 AND username = $2 RETURNING *',
+      [groupId, username]
+    );
+    return rows[0] || null;
+  }
+
   async deleteGroup(id) {
     const { rows } = await pool.query('DELETE FROM student_groups WHERE id = $1 RETURNING *', [id]);
     return rows[0] || null;

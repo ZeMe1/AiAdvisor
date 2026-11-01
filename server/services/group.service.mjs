@@ -65,6 +65,32 @@ export class GroupService {
       } : null,
     };
   }
+
+  async listGroupMembers(groupId) {
+    const group = await groupRepository.findGroupById(groupId);
+    if (!group) throw HttpError.notFound('Group not found');
+    return groupRepository.listGroupMembers(groupId);
+  }
+
+  async enrollStudent(groupId, username) {
+    const group = await groupRepository.findGroupById(groupId);
+    if (!group) throw HttpError.notFound('Group not found');
+
+    const cleanUsername = String(username).trim();
+    if (!cleanUsername) throw HttpError.badRequest('Username cannot be empty');
+
+    await userRepository.findOrCreateUser(cleanUsername);
+    await groupRepository.enrollStudent(groupId, cleanUsername);
+    return groupRepository.listGroupMembers(groupId);
+  }
+
+  async removeStudent(groupId, username) {
+    const group = await groupRepository.findGroupById(groupId);
+    if (!group) throw HttpError.notFound('Group not found');
+
+    await groupRepository.removeStudent(groupId, String(username).trim());
+    return groupRepository.listGroupMembers(groupId);
+  }
 }
 
 export const groupService = new GroupService();

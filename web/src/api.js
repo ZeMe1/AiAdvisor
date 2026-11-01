@@ -41,4 +41,7 @@ export const api = {
   adminGetGroups: () => j('/api/admin/groups'),
   adminCreateGroup: (body) => j('/api/admin/groups', post(body)),
   adminAssignAdvisor: (id, advisor_username) => j(`/api/admin/groups/${id}/advisor`, { method: 'PUT', body: JSON.stringify({ advisor_username }) }),
+  adminGetGroupMembers: (id) => j(`/api/admin/groups/${id}/members`),
+  adminEnrollStudent: (id, username) => j(`/api/admin/groups/${id}/members`, post({ username })),
+  adminRemoveStudent: (id, username) => j(`/api/admin/groups/${id}/members/${encodeURIComponent(username)}`, { method: 'DELETE' }),
 };

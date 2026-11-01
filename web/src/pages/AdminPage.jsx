@@ -30,6 +30,13 @@ export default function AdminPage() {
   const [newGroupAdvisor, setNewGroupAdvisor] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
 
+  // Manage Students Modal state
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [studentInput, setStudentInput] = useState('');
+  const [enrolling, setEnrolling] = useState(false);
+
   // Confirmation Modal state
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
@@ -117,8 +124,14 @@ export default function AdminPage() {
   }
 
   // --- Group & Advisor actions (US13) ---
+  // ONLY users with role 'Advisor' (not Administrator, not Student)
   const advisorCandidates = useMemo(() => {
-    return users.filter((u) => !u.is_blocked && (u.role === 'Advisor' || u.role === 'Administrator'));
+    return users.filter((u) => !u.is_blocked && u.role === 'Advisor');
+  }, [users]);
+
+  // Registered students for suggestions
+  const studentCandidates = useMemo(() => {
+    return users.filter((u) => !u.is_blocked && u.role === 'Student');
   }, [users]);
 
   function handleAssignAdvisorPrompt(group, newAdvisorUsername) {
@@ -129,7 +142,7 @@ export default function AdminPage() {
       isOpen: true,
       title: 'Assign Academic Advisor',
       message: newAdvisorUsername
-        ? `Assign ${advisorLabel} (@${newAdvisorUsername}) as the advisor for group ${group.name}?`
+        ? `Assign advisor ${advisorLabel} (@${newAdvisorUsername}) to group ${group.name}?`
         : `Remove assigned advisor from group ${group.name}?`,
       confirmText: 'Save Assignment',
       isDanger: false,
@@ -170,6 +183,67 @@ export default function AdminPage() {
     } finally {
       setCreatingGroup(false);
     }
+  }
+
+  // --- Students Management in Group ---
+  async function openStudentsModal(group) {
+    setSelectedGroup(group);
+    setStudentInput('');
+    setLoadingMembers(true);
+    try {
+      const members = await api.adminGetGroupMembers(group.id);
+      setGroupMembers(members);
+    } catch (e) {
+      toast.error('Failed to load group members: ' + e.message);
+      setGroupMembers([]);
+    } finally {
+      setLoadingMembers(false);
+    }
+  }
+
+  async function handleEnrollStudent(e) {
+    e.preventDefault();
+    const username = studentInput.trim();
+    if (!username || !selectedGroup) return;
+
+    setEnrolling(true);
+    try {
+      const updatedMembers = await api.adminEnrollStudent(selectedGroup.id, username);
+      setGroupMembers(updatedMembers);
+      setStudentInput('');
+      setGroups((prev) =>
+        prev.map((g) => (g.id === selectedGroup.id ? { ...g, member_count: updatedMembers.length } : g))
+      );
+      toast.success(`Student ${username} added to group ${selectedGroup.name}`);
+    } catch (e) {
+      toast.error('Failed to add student: ' + e.message);
+    } finally {
+      setEnrolling(false);
+    }
+  }
+
+  function handleRemoveStudentPrompt(username) {
+    if (!selectedGroup) return;
+    setModalConfig({
+      isOpen: true,
+      title: 'Remove Student from Group',
+      message: `Are you sure you want to remove student ${username} from group ${selectedGroup.name}?`,
+      confirmText: 'Remove Student',
+      isDanger: true,
+      onConfirm: async () => {
+        setModalConfig((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const updatedMembers = await api.adminRemoveStudent(selectedGroup.id, username);
+          setGroupMembers(updatedMembers);
+          setGroups((prev) =>
+            prev.map((g) => (g.id === selectedGroup.id ? { ...g, member_count: updatedMembers.length } : g))
+          );
+          toast.success(`Student ${username} removed from group ${selectedGroup.name}`);
+        } catch (e) {
+          toast.error('Failed to remove student: ' + e.message);
+        }
+      },
+    });
   }
 
   // Filtered lists
@@ -339,7 +413,7 @@ export default function AdminPage() {
                       <th>Group Name</th>
                       <th>Program</th>
                       <th>Study Year</th>
-                      <th>Students</th>
+                      <th>Enrolled Students</th>
                       <th>Assigned Academic Advisor</th>
                     </tr>
                   </thead>
@@ -355,18 +429,31 @@ export default function AdminPage() {
                         <td>{g.program}</td>
                         <td>Year {g.study_year}</td>
                         <td>
-                          <span
-                            style={{
-                              backgroundColor: '#eef2ff',
-                              color: '#3730a3',
-                              padding: '2px 8px',
-                              borderRadius: '10px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                            }}
-                          >
-                            {g.member_count ?? 0} students
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <button
+                              className="btn btn-mini"
+                              onClick={() => openStudentsModal(g)}
+                              style={{
+                                backgroundColor: '#eef2ff',
+                                color: '#3730a3',
+                                border: '1px solid #c7d2fe',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                              title="Click to view and manage students"
+                            >
+                              👥 {g.member_count ?? 0} students
+                            </button>
+                            <button
+                              className="btn btn-mini"
+                              onClick={() => openStudentsModal(g)}
+                              style={{ padding: '2px 6px', fontSize: '11px' }}
+                            >
+                              + Add
+                            </button>
+                          </div>
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -384,7 +471,7 @@ export default function AdminPage() {
                               <option value="">-- No Advisor Assigned --</option>
                               {advisorCandidates.map((adv) => (
                                 <option key={adv.username} value={adv.username}>
-                                  {adv.display_name ? `${adv.display_name} (@${adv.username})` : adv.username} ({adv.role})
+                                  {adv.display_name ? `${adv.display_name} (@${adv.username})` : adv.username}
                                 </option>
                               ))}
                             </select>
@@ -422,12 +509,12 @@ export default function AdminPage() {
             <h3 style={{ marginTop: 0 }}>Create Student Group</h3>
             <form onSubmit={handleCreateGroup}>
               <div style={{ marginBottom: '1rem' }}>
-                <label className="small muted">Group Name (e.g. CS-23-1, IS-22-2)</label>
+                <label className="small muted">Group Name (e.g. CS-23-1, 404)</label>
                 <input
                   required
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
-                  placeholder="CS-23-1"
+                  placeholder="404"
                   style={{ width: '100%', marginTop: '0.3rem' }}
                 />
               </div>
@@ -438,7 +525,7 @@ export default function AdminPage() {
                   required
                   value={newGroupProgram}
                   onChange={(e) => setNewGroupProgram(e.target.value)}
-                  placeholder="Computer Science"
+                  placeholder="Information Systems"
                   style={{ width: '100%', marginTop: '0.3rem' }}
                 />
               </div>
@@ -458,7 +545,7 @@ export default function AdminPage() {
               </div>
 
               <div style={{ marginBottom: '1.5rem' }}>
-                <label className="small muted">Assign Academic Advisor (Optional)</label>
+                <label className="small muted">Assign Academic Advisor (Optional - Advisor role only)</label>
                 <select
                   value={newGroupAdvisor}
                   onChange={(e) => setNewGroupAdvisor(e.target.value)}
@@ -467,7 +554,7 @@ export default function AdminPage() {
                   <option value="">-- No Advisor Assigned --</option>
                   {advisorCandidates.map((adv) => (
                     <option key={adv.username} value={adv.username}>
-                      {adv.display_name ? `${adv.display_name} (@${adv.username})` : adv.username} ({adv.role})
+                      {adv.display_name ? `${adv.display_name} (@${adv.username})` : adv.username}
                     </option>
                   ))}
                 </select>
@@ -491,6 +578,107 @@ export default function AdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: MANAGE STUDENTS IN GROUP ================= */}
+      {selectedGroup && (
+        <div className="modal-backdrop">
+          <div className="card modal-card" style={{ maxWidth: 600, width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: '0 0 0.25rem 0' }}>Group {selectedGroup.name} — Students</h3>
+                <p className="muted small" style={{ margin: 0 }}>
+                  {selectedGroup.program} · Year {selectedGroup.study_year}
+                </p>
+              </div>
+              <button
+                className="btn btn-mini"
+                onClick={() => setSelectedGroup(null)}
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {/* Form to add a student */}
+            <form onSubmit={handleEnrollStudent} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
+              <input
+                required
+                list="registered-students-list"
+                value={studentInput}
+                onChange={(e) => setStudentInput(e.target.value)}
+                placeholder="Enter student login (e.g. 240103199)..."
+                style={{ flex: 1 }}
+              />
+              <datalist id="registered-students-list">
+                {studentCandidates.map((s) => (
+                  <option key={s.username} value={s.username}>
+                    {s.display_name ? `${s.display_name} (@${s.username})` : s.username}
+                  </option>
+                ))}
+              </datalist>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={enrolling || !studentInput.trim()}
+              >
+                {enrolling ? 'Adding...' : '+ Add Student'}
+              </button>
+            </form>
+
+            {/* Table of enrolled students */}
+            {loadingMembers ? (
+              <p className="muted">Loading students in this group...</p>
+            ) : groupMembers.length === 0 ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#f9f9f9', borderRadius: 6 }}>
+                <p className="muted" style={{ margin: 0 }}>
+                  No students are enrolled in group <b>{selectedGroup.name}</b> yet.
+                  <br />
+                  <span className="small">Enter a student login above to enroll them.</span>
+                </p>
+              </div>
+            ) : (
+              <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                <table className="tbl" style={{ margin: 0 }}>
+                  <thead>
+                    <tr>
+                      <th>Student Login</th>
+                      <th>Display Name</th>
+                      <th>Enrolled Date</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupMembers.map((m) => (
+                      <tr key={m.username}>
+                        <td><b className="code">{m.username}</b></td>
+                        <td>{m.display_name || <span className="muted">—</span>}</td>
+                        <td className="small">{new Date(m.enrolled_at).toLocaleDateString()}</td>
+                        <td>
+                          <button
+                            className="btn btn-danger btn-mini"
+                            onClick={() => handleRemoveStudentPrompt(m.username)}
+                            style={{ padding: '2px 6px', fontSize: '11px' }}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <button
+                className="btn"
+                onClick={() => setSelectedGroup(null)}
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

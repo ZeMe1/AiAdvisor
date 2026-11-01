@@ -10,3 +10,7 @@ export const createGroupSchema = z.object({
 export const assignAdvisorSchema = z.object({
   advisor_username: z.string().trim().nullable().optional(),
 });
+
+export const enrollStudentSchema = z.object({
+  username: z.string().trim().min(2, 'Username is required'),
+});

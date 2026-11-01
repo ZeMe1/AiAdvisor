@@ -38,6 +38,26 @@ export class AdminController {
     const updated = await groupService.assignAdvisor(groupId, advisor_username);
     res.json(updated);
   }
+
+  async listGroupMembers(req, res) {
+    const groupId = parseInt(req.params.id, 10);
+    const members = await groupService.listGroupMembers(groupId);
+    res.json(members);
+  }
+
+  async enrollStudent(req, res) {
+    const groupId = parseInt(req.params.id, 10);
+    const { username } = req.body;
+    const members = await groupService.enrollStudent(groupId, username);
+    res.json(members);
+  }
+
+  async removeStudent(req, res) {
+    const groupId = parseInt(req.params.id, 10);
+    const { username } = req.params;
+    const members = await groupService.removeStudent(groupId, username);
+    res.json(members);
+  }
 }
 
 export const adminController = new AdminController();
