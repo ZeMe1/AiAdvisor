@@ -65,6 +65,10 @@ export const useAuthStore = create((set, get) => ({
     } catch {
       // ignore logout network errors
     }
+    try {
+      localStorage.removeItem('zeme_courses_cache_v1');
+      localStorage.removeItem('zeme_curriculum_cache_v1');
+    } catch {}
     set({ stage: 'login', me: null, profile: null, loginNotice: null, error: null });
   },
 
