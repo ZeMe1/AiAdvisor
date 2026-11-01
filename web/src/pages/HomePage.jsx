@@ -45,7 +45,8 @@ export default function HomePage() {
     const isElective = course.isElective || /^XXX/i.test(course.code);
     if (isElective) {
       if (course.elective) {
-        navigate(`/electives/${encodeURIComponent(course.code)}`, { state: { course } });
+        const mufSqId = course.elective.mufSqId;
+        navigate(`/electives/${encodeURIComponent(course.code)}${mufSqId ? `?mufSqId=${encodeURIComponent(mufSqId)}` : ''}`, { state: { course } });
       } else {
         toast.warn(`У элективной группы ${course.code} нет доступных вариантов в текущем плане.`);
       }

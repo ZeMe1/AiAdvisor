@@ -54,7 +54,7 @@ export function parseGroupTitle(title = '') {
   if (!m) return { name: title.trim(), candidates: [] };
   return {
     name: m[1].trim(),
-    candidates: m[2].split(',').map((s) => s.trim()).filter(Boolean),
+    candidates: m[2].split(/[,/]/).map((s) => s.trim()).filter(Boolean),
   };
 }
 

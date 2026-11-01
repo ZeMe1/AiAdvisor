@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseCurriculumHtml } from '../src/sdu/parsers/curriculum.js';
+import { parseCurriculumHtml, parseGroupTitle } from '../src/sdu/parsers/curriculum.js';
 import { parseSectionsResponse, parseCourseInfoHtml } from '../src/sdu/parsers/sections.js';
 import { parseCourseRegPage } from '../src/sdu/parsers/registrations.js';
 import { parseElectivesResponse } from '../src/sdu/parsers/electives.js';
@@ -30,6 +30,16 @@ describe('SDU Normalizers', () => {
 });
 
 describe('SDU Curriculum Parser', () => {
+  it('parseGroupTitle handles both comma and slash separated candidate codes', () => {
+    expect(parseGroupTitle('Turkish language 1 (MDE 283, MDE 285)')).toEqual({
+      name: 'Turkish language 1',
+      candidates: ['MDE 283', 'MDE 285'],
+    });
+    expect(parseGroupTitle('Elective 8 (INF 362/INF 391/ CSS 375/ INF 392)')).toEqual({
+      name: 'Elective 8',
+      candidates: ['INF 362', 'INF 391', 'CSS 375', 'INF 392'],
+    });
+  });
   it('parses curriculum HTML fixture accurately', () => {
     const html = fs.readFileSync(path.resolve('test/fixtures/curriculum.fixture.html'), 'utf8');
     const result = parseCurriculumHtml(html);

@@ -211,36 +211,53 @@ export class ScheduleService {
 
   async getElectives(client, payload) {
     const { dk, mufSqId, periodNo, groupName, candidates = [], codeType, lgCode, type } = payload;
+    const splitCandidates = (Array.isArray(candidates) ? candidates : [candidates])
+      .flatMap((c) => String(c).split(/[,/]/))
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     if (DEMO) {
-      return { fromPortal: false, courses: candidates.map((code) => ({ code, name: '' })) };
+      return { fromPortal: false, courses: splitCandidates.map((code) => ({ code, name: '' })) };
     }
 
     let def = {};
-    const studentData = await cacheRepository.getStudentData(client.localUsername);
-    if (studentData?.track?.id) {
-      const cachedCurr = await cacheRepository.getCurriculum(studentData.track.id);
-      if (cachedCurr?.sectionsDefaults) def = cachedCurr.sectionsDefaults;
-    }
-    if (!def.pc) {
-      await this.getCurriculum(client);
-      const cachedCurr = await cacheRepository.getCurriculum(studentData?.track?.id);
-      if (cachedCurr?.sectionsDefaults) def = cachedCurr.sectionsDefaults;
+    try {
+      const studentData = await cacheRepository.getStudentData(client.localUsername);
+      if (studentData?.track?.id) {
+        const cachedCurr = await cacheRepository.getCurriculum(studentData.track.id);
+        if (cachedCurr?.sectionsDefaults) def = cachedCurr.sectionsDefaults;
+      }
+      if (!def.pc && typeof client.getCurriculum === 'function') {
+        await this.getCurriculum(client);
+        const cachedCurr = await cacheRepository.getCurriculum(studentData?.track?.id);
+        if (cachedCurr?.sectionsDefaults) def = cachedCurr.sectionsDefaults;
+      }
+    } catch (e) {
+      console.warn('[getElectives] failed to get curriculum defaults:', e.message);
     }
 
-    const groupTitle = groupName ? `${groupName} (${candidates.join(', ')})` : '';
-    return client.getElectiveCourses({
-      dk: String(dk),
-      mufSqId: mufSqId ?? null,
-      periodNo: periodNo ?? null,
-      groupTitle,
-      pc: def.pc,
-      py: def.py,
-      track: def.track,
-      codeType: codeType ?? 'R',
-      lgCode: lgCode ?? '',
-      type: type ?? 'NAE',
-      fallbackCodes: candidates,
-    });
+    const groupTitle = groupName ? `${groupName} (${splitCandidates.join(', ')})` : '';
+    try {
+      return await client.getElectiveCourses({
+        dk: String(dk),
+        mufSqId: mufSqId ?? null,
+        periodNo: periodNo ?? null,
+        groupTitle,
+        pc: def.pc,
+        py: def.py,
+        track: def.track,
+        codeType: codeType ?? 'R',
+        lgCode: lgCode ?? '',
+        type: type ?? 'NAE',
+        fallbackCodes: splitCandidates,
+      });
+    } catch (err) {
+      console.warn(`[getElectives] Upstream SDU call failed for ${dk}: ${err.message}. Returning fallback candidates.`);
+      return {
+        fromPortal: false,
+        courses: splitCandidates.map((code) => ({ code, name: '' })),
+      };
+    }
   }
 }
 

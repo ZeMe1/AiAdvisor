@@ -93,4 +93,29 @@ describe('API Integration & Validation Tests', () => {
     // set-cookie must NOT delete or reset the session cookie
     expect(res.headers['set-cookie']).toBeUndefined();
   });
+
+  it('scheduleService.getElectives falls back to candidate courses when upstream SDU fails', async () => {
+    const { scheduleService } = await import('../server/services/schedule.service.mjs');
+    const mockClient = {
+      localUsername: 'testuser',
+      getElectiveCourses: async () => {
+        const err = new Error('Upstream SDU session expired');
+        err.sessionExpired = true;
+        throw err;
+      },
+    };
+
+    const result = await scheduleService.getElectives(mockClient, {
+      dk: 'XXX XXX',
+      mufSqId: 8245,
+      candidates: ['INF 362/INF 391/ CSS 375'],
+    });
+
+    expect(result.fromPortal).toBe(false);
+    expect(result.courses).toEqual([
+      { code: 'INF 362', name: '' },
+      { code: 'INF 391', name: '' },
+      { code: 'CSS 375', name: '' },
+    ]);
+  });
 });
