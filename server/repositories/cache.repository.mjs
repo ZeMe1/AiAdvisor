@@ -1,8 +1,8 @@
 import { pool } from '../db.mjs';
 
-export const STUDENT_CACHE_TTL_MS = 20 * 60 * 1000;       // 20 минут для регистраций / корзины
+export const STUDENT_CACHE_TTL_MS = 2 * 60 * 60 * 1000;       // 2 часа для регистраций / корзины
 export const CURRICULUM_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 часа для куррикулума
-export const SECTIONS_CACHE_TTL_MS = 15 * 60 * 1000;       // 15 минут для секций
+export const SECTIONS_CACHE_TTL_MS = 4 * 60 * 60 * 1000;        // 4 часа для секций
 
 export class CacheRepository {
   /** ----------------- Student Data Cache (/api/me) ----------------- */

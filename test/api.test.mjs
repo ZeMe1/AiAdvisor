@@ -74,4 +74,23 @@ describe('API Integration & Validation Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body.id).toBe('42');
   });
+
+  it('errorHandler preserves session cookie on sessionExpired error', async () => {
+    const express = (await import('express')).default;
+    const { errorHandler } = await import('../server/middlewares/error.middleware.mjs');
+
+    const testApp = express();
+    testApp.get('/test-session-expired', (req, res, next) => {
+      const err = new Error('Сессия портала истекла — войдите заново');
+      err.sessionExpired = true;
+      next(err);
+    });
+    testApp.use(errorHandler);
+
+    const res = await request(testApp).get('/test-session-expired');
+    expect(res.status).toBe(401);
+    expect(res.body.sessionExpired).toBe(true);
+    // set-cookie must NOT delete or reset the session cookie
+    expect(res.headers['set-cookie']).toBeUndefined();
+  });
 });

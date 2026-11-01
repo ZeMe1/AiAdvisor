@@ -15,10 +15,7 @@ export const asyncHandler = (fn) => (req, res, next) => {
 export async function errorHandler(err, req, res, _next) {
   const isSessionExpired = err.sessionExpired === true;
   if (isSessionExpired) {
-    if (req.sessionId) {
-      await sessionRepository.deleteSession(req.sessionId).catch(() => {});
-    }
-    clearSessionCookie(res);
+    console.warn(`[sdu session warning] Upstream SDU session expired for ${req.session?.username || 'user'}. Preserving local session.`);
   }
 
   const status = isSessionExpired ? 401 : (err instanceof HttpError ? err.status : (err.status || 500));

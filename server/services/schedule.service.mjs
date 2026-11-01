@@ -19,9 +19,17 @@ export class ScheduleService {
 
     // 2. Если trackId ещё нет в БД, запрашиваем страницу регистраций
     if (!trackId) {
-      const me = await client.getCourseReg();
-      if (me.authenticated === false) throw HttpError.sessionExpired();
-      trackId = me.track?.id;
+      try {
+        const me = await client.getCourseReg();
+        if (me.authenticated !== false) trackId = me.track?.id;
+      } catch (err) {
+        console.warn('[getCurriculum] getCourseReg failed, checking stale student cache:', err.message);
+      }
+    }
+
+    if (!trackId) {
+      const staleStudent = await cacheRepository.getStudentData(client.localUsername, Infinity);
+      trackId = staleStudent?.track?.id;
     }
 
     if (!trackId) {
@@ -31,12 +39,22 @@ export class ScheduleService {
     const cached = await cacheRepository.getCurriculum(trackId);
     if (cached) return cached.curriculum;
 
-    const curriculum = await client.getCurriculum(trackId);
-    const withParams = curriculum.semesters.flatMap((s) => s.courses).find((c) => c.sectionsParams);
-    const sectionsDefaults = withParams?.sectionsParams ?? null;
+    try {
+      const curriculum = await client.getCurriculum(trackId);
+      const withParams = curriculum.semesters.flatMap((s) => s.courses).find((c) => c.sectionsParams);
+      const sectionsDefaults = withParams?.sectionsParams ?? null;
 
-    await cacheRepository.setCurriculum(trackId, curriculum, sectionsDefaults).catch(console.error);
-    return curriculum;
+      await cacheRepository.setCurriculum(trackId, curriculum, sectionsDefaults).catch(console.error);
+      return curriculum;
+    } catch (err) {
+      // Fallback на любой ранее сохраненный куррикулум этого трека
+      const stale = await cacheRepository.getCurriculum(trackId, Infinity);
+      if (stale) {
+        console.warn(`[getCurriculum] Returning stale cached curriculum for track ${trackId} due to:`, err.message);
+        return stale.curriculum;
+      }
+      throw err;
+    }
   }
 
   async getMe(client, forceRefresh = false) {
@@ -53,14 +71,20 @@ export class ScheduleService {
     try {
       me = await client.getCourseReg();
     } catch (err) {
-      const cached = await cacheRepository.getStudentData(client.localUsername);
-      if (cached) return cached;
+      const cached = await cacheRepository.getStudentData(client.localUsername, Infinity);
+      if (cached) {
+        console.warn(`[getMe] Returning stale student cache for ${client.localUsername} due to SDU error:`, err.message);
+        return cached;
+      }
       throw err;
     }
 
     if (me.authenticated === false) {
-      const cached = await cacheRepository.getStudentData(client.localUsername);
-      if (cached) return cached;
+      const cached = await cacheRepository.getStudentData(client.localUsername, Infinity);
+      if (cached) {
+        console.warn(`[getMe] SDU returned unauthenticated, returning stale student cache for ${client.localUsername}`);
+        return cached;
+      }
       throw HttpError.sessionExpired();
     }
 
@@ -141,26 +165,40 @@ export class ScheduleService {
     const cached = await cacheRepository.getSections(cacheKey);
     if (cached) return cached;
 
-    const curriculum = await this.getCurriculum(client);
-    const found = curriculum.semesters.flatMap((s) => s.courses).find((c) => c.code.toUpperCase() === code.toUpperCase());
-    const params = found?.sectionsParams;
+    try {
+      const curriculum = await this.getCurriculum(client);
+      const found = curriculum.semesters.flatMap((s) => s.courses).find((c) => c.code.toUpperCase() === code.toUpperCase());
+      const params = found?.sectionsParams;
 
-    if (!params) {
-      const studentData = await cacheRepository.getStudentData(client.localUsername);
-      const progTrack = studentData?.progTrack ?? 'TRACK0';
-      try {
-        const searchData = await client.searchCourse(code, progTrack);
-        await cacheRepository.setSections(cacheKey, searchData).catch(console.error);
-        return searchData;
-      } catch (searchErr) {
-        if (searchErr.sessionExpired) throw searchErr;
-        throw HttpError.notFound(`Курс ${code} не найден в куррикулуме и на портале`);
+      if (!params) {
+        const studentData = await cacheRepository.getStudentData(client.localUsername, Infinity);
+        const progTrack = studentData?.progTrack ?? 'TRACK0';
+        try {
+          const searchData = await client.searchCourse(code, progTrack);
+          await cacheRepository.setSections(cacheKey, searchData).catch(console.error);
+          return searchData;
+        } catch (searchErr) {
+          const stale = await cacheRepository.getSections(cacheKey, Infinity);
+          if (stale) {
+            console.warn(`[getSections] Returning stale cached search sections for ${code}`);
+            return stale;
+          }
+          if (searchErr.sessionExpired) throw searchErr;
+          throw HttpError.notFound(`Курс ${code} не найден в куррикулуме и на портале`);
+        }
       }
-    }
 
-    const sectionsData = await client.getSections({ ...params, dk: code, mufSqId });
-    await cacheRepository.setSections(cacheKey, sectionsData).catch(console.error);
-    return sectionsData;
+      const sectionsData = await client.getSections({ ...params, dk: code, mufSqId });
+      await cacheRepository.setSections(cacheKey, sectionsData).catch(console.error);
+      return sectionsData;
+    } catch (err) {
+      const stale = await cacheRepository.getSections(cacheKey, Infinity);
+      if (stale) {
+        console.warn(`[getSections] Returning stale cached sections for ${code} due to:`, err.message);
+        return stale;
+      }
+      throw err;
+    }
   }
 
   async searchCourse(client, code) {
