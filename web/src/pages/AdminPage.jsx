@@ -142,7 +142,7 @@ export default function AdminPage() {
       isOpen: true,
       title: 'Assign Academic Advisor',
       message: newAdvisorUsername
-        ? `Assign advisor ${advisorLabel} (@${newAdvisorUsername}) to group ${group.name}?`
+        ? `Assign advisor ${advisorLabel} to group ${group.name}?`
         : `Remove assigned advisor from group ${group.name}?`,
       confirmText: 'Save Assignment',
       isDanger: false,
@@ -297,13 +297,13 @@ export default function AdminPage() {
               className={activeTab === 'users' ? 'btn btn-primary' : 'btn'}
               onClick={() => setActiveTab('users')}
             >
-              👥 Users Management
+              Users Management
             </button>
             <button
               className={activeTab === 'groups' ? 'btn btn-primary' : 'btn'}
               onClick={() => setActiveTab('groups')}
             >
-              🏫 Groups & Advisors
+              Groups
             </button>
           </div>
         </div>
@@ -429,31 +429,13 @@ export default function AdminPage() {
                         <td>{g.program}</td>
                         <td>Year {g.study_year}</td>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <button
-                              className="btn btn-mini"
-                              onClick={() => openStudentsModal(g)}
-                              style={{
-                                backgroundColor: '#eef2ff',
-                                color: '#3730a3',
-                                border: '1px solid #c7d2fe',
-                                padding: '3px 8px',
-                                borderRadius: '6px',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
-                              title="Click to view and manage students"
-                            >
-                              👥 {g.member_count ?? 0} students
-                            </button>
-                            <button
-                              className="btn btn-mini"
-                              onClick={() => openStudentsModal(g)}
-                              style={{ padding: '2px 6px', fontSize: '11px' }}
-                            >
-                              + Add
-                            </button>
-                          </div>
+                          <button
+                            className="btn btn-mini"
+                            onClick={() => openStudentsModal(g)}
+                            style={{ padding: '3px 10px', fontSize: '12px' }}
+                          >
+                            + Add
+                          </button>
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -471,7 +453,7 @@ export default function AdminPage() {
                               <option value="">-- No Advisor Assigned --</option>
                               {advisorCandidates.map((adv) => (
                                 <option key={adv.username} value={adv.username}>
-                                  {adv.display_name ? `${adv.display_name} (@${adv.username})` : adv.username}
+                                  {adv.display_name || adv.username}
                                 </option>
                               ))}
                             </select>
@@ -554,7 +536,7 @@ export default function AdminPage() {
                   <option value="">-- No Advisor Assigned --</option>
                   {advisorCandidates.map((adv) => (
                     <option key={adv.username} value={adv.username}>
-                      {adv.display_name ? `${adv.display_name} (@${adv.username})` : adv.username}
+                      {adv.display_name || adv.username}
                     </option>
                   ))}
                 </select>

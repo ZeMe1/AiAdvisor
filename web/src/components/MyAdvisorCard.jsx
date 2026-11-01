@@ -149,7 +149,7 @@ export default function MyAdvisorCard() {
               </span>
             </div>
             <div className="muted small" style={{ marginTop: '2px' }}>
-              @{advisor.username} · {group.program} (Group {group.name})
+              {group.program} (Group {group.name})
             </div>
           </div>
         </div>
