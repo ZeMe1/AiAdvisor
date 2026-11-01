@@ -1,26 +1,35 @@
 import { create } from 'zustand';
 
-const PLAN_STORAGE_KEY = 'zeme_plan_v1';
+function getPlanStorageKey(username) {
+  return username ? `zeme_${username}_plan_v1` : 'zeme_plan_v1';
+}
 
-function loadInitialPlan() {
+function loadInitialPlan(username) {
   try {
-    const raw = localStorage.getItem(PLAN_STORAGE_KEY);
+    const raw = localStorage.getItem(getPlanStorageKey(username));
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function persistPlan(plan) {
+function persistPlan(username, plan) {
   try {
-    localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify(plan));
+    localStorage.setItem(getPlanStorageKey(username), JSON.stringify(plan));
   } catch (err) {
     console.error('[planStore] Failed to persist plan to localStorage:', err);
   }
 }
 
-export const usePlanStore = create((set) => ({
-  plan: loadInitialPlan(),
+export const usePlanStore = create((set, get) => ({
+  currentUsername: null,
+  plan: loadInitialPlan(null),
+
+  initForUser: (username) => {
+    if (!username) return;
+    const plan = loadInitialPlan(username);
+    set({ currentUsername: username, plan });
+  },
 
   addToPlan: ({ code, name, theory, practice, lab }) => {
     const entry = {
@@ -36,7 +45,7 @@ export const usePlanStore = create((set) => ({
 
     set((state) => {
       const nextPlan = [...state.plan.filter((p) => p.code !== code), entry];
-      persistPlan(nextPlan);
+      persistPlan(state.currentUsername, nextPlan);
       return { plan: nextPlan };
     });
   },
@@ -44,13 +53,21 @@ export const usePlanStore = create((set) => ({
   dropFromPlan: (code) => {
     set((state) => {
       const nextPlan = state.plan.filter((p) => p.code !== code);
-      persistPlan(nextPlan);
+      persistPlan(state.currentUsername, nextPlan);
       return { plan: nextPlan };
     });
   },
 
   clearPlan: () => {
-    persistPlan([]);
+    const user = get().currentUsername;
+    try {
+      localStorage.removeItem(getPlanStorageKey(user));
+      localStorage.removeItem('zeme_plan_v1');
+    } catch {}
     set({ plan: [] });
+  },
+
+  resetStore: () => {
+    set({ plan: [], currentUsername: null });
   },
 }));

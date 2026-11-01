@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { api } from '../api.js';
+import { useScheduleStore } from './scheduleStore.js';
+import { usePlanStore } from './planStore.js';
 
 export const useAuthStore = create((set, get) => ({
   stage: 'boot', // 'boot' | 'login' | '2fa' | 'main'
@@ -17,13 +19,20 @@ export const useAuthStore = create((set, get) => ({
       const me = await api.me();
       set({ me, stage: 'main', error: null });
 
+      let profileData = null;
       if (!me.demo) {
         try {
-          const profile = await api.profile();
-          set({ profile });
+          profileData = await api.profile();
+          set({ profile: profileData });
         } catch (e) {
           console.error('[authStore] Failed to fetch profile:', e);
         }
+      }
+
+      const activeUser = profileData?.username || me?.user?.username || me?.username;
+      if (activeUser) {
+        useScheduleStore.getState().initForUser?.(activeUser);
+        usePlanStore.getState().initForUser?.(activeUser);
       }
     } catch {
       set({ stage: 'login', me: null, profile: null });
@@ -31,6 +40,10 @@ export const useAuthStore = create((set, get) => ({
   },
 
   login: async (username, password) => {
+    // Reset stores and caches from any previous user session before logging in
+    useScheduleStore.getState().clearAllCache?.();
+    usePlanStore.getState().resetStore?.();
+
     set({ busy: true, error: null, loginNotice: null });
     try {
       const res = await api.login(username, password);
@@ -65,9 +78,12 @@ export const useAuthStore = create((set, get) => ({
     } catch {
       // ignore logout network errors
     }
+    useScheduleStore.getState().clearAllCache?.();
+    usePlanStore.getState().resetStore?.();
     try {
       localStorage.removeItem('zeme_courses_cache_v1');
       localStorage.removeItem('zeme_curriculum_cache_v1');
+      localStorage.removeItem('zeme_plan_v1');
     } catch {}
     set({ stage: 'login', me: null, profile: null, loginNotice: null, error: null });
   },

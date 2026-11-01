@@ -92,4 +92,39 @@ describe('ScheduleStore Local-First Caching', () => {
     expect(localStorage.getItem('zeme_curriculum_cache_v1')).toBeNull();
     expect(localStorage.getItem('zeme_courses_cache_v1')).toBeNull();
   });
+
+  it('isolates plan and curriculum across different user accounts', async () => {
+    const { usePlanStore } = await import('../web/src/stores/planStore.js');
+    const { useScheduleStore } = await import('../web/src/stores/scheduleStore.js');
+
+    // 1. User A logs in and adds a course to their plan
+    usePlanStore.getState().initForUser('student_A');
+    usePlanStore.getState().addToPlan({
+      code: 'CSS 216',
+      name: 'Mobile Development',
+      theory: { section: '01', teacher: 'Teacher A', schedule: [] },
+    });
+    expect(usePlanStore.getState().plan).toHaveLength(1);
+    expect(usePlanStore.getState().plan[0].code).toBe('CSS 216');
+
+    // User A's curriculum in localStorage
+    localStorage.setItem('zeme_student_A_curriculum_v1', JSON.stringify({ program: 'User A Program' }));
+
+    // 2. User B logs in
+    useScheduleStore.getState().clearAllCache();
+    usePlanStore.getState().resetStore();
+    usePlanStore.getState().initForUser('student_B');
+
+    // Verify User B has an empty plan and does not inherit User A's plan
+    expect(usePlanStore.getState().plan).toHaveLength(0);
+
+    // Verify User A's plan in storage was not contaminated
+    const rawUserAPlan = JSON.parse(localStorage.getItem('zeme_student_A_plan_v1'));
+    expect(rawUserAPlan).toHaveLength(1);
+    expect(rawUserAPlan[0].code).toBe('CSS 216');
+
+    // 3. User B loads their own curriculum
+    useScheduleStore.getState().initForUser('student_B');
+    expect(useScheduleStore.getState().curriculum).toBeNull();
+  });
 });

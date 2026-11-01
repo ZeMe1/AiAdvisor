@@ -6,7 +6,10 @@ import { usePlanStore } from './planStore.js';
 
 const NULL_DRAFT = { N: null, P: null, L: null };
 const COURSES_STORAGE_KEY = 'zeme_courses_cache_v1';
-const CURRICULUM_STORAGE_KEY = 'zeme_curriculum_cache_v1';
+
+function getCurriculumStorageKey(username) {
+  return username ? `zeme_${username}_curriculum_v1` : 'zeme_curriculum_cache_v1';
+}
 
 function loadInitialCoursesCache() {
   try {
@@ -25,18 +28,18 @@ function persistCoursesCache(cache) {
   }
 }
 
-function loadInitialCurriculumCache() {
+function loadInitialCurriculumCache(username) {
   try {
-    const raw = localStorage.getItem(CURRICULUM_STORAGE_KEY);
+    const raw = localStorage.getItem(getCurriculumStorageKey(username));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-function persistCurriculumCache(curriculum) {
+function persistCurriculumCache(username, curriculum) {
   try {
-    localStorage.setItem(CURRICULUM_STORAGE_KEY, JSON.stringify(curriculum));
+    localStorage.setItem(getCurriculumStorageKey(username), JSON.stringify(curriculum));
   } catch (err) {
     console.error('[scheduleStore] Failed to persist curriculum cache to localStorage:', err);
   }
@@ -45,18 +48,34 @@ function persistCurriculumCache(curriculum) {
 export const clearScheduleLocalStorage = () => {
   try {
     localStorage.removeItem(COURSES_STORAGE_KEY);
-    localStorage.removeItem(CURRICULUM_STORAGE_KEY);
+    localStorage.removeItem('zeme_curriculum_cache_v1');
+    const keys = Object.keys(localStorage);
+    for (const k of keys) {
+      if (k.startsWith('zeme_')) localStorage.removeItem(k);
+    }
   } catch {}
 };
 
 export const useScheduleStore = create((set, get) => ({
-  curriculum: loadInitialCurriculumCache(),
+  curriculumUser: null,
+  curriculum: null,
   loadingCurriculum: false,
 
   coursesCache: loadInitialCoursesCache(),
 
   eligibilityMap: {},
   loadingEligibility: false,
+
+  initForUser: (username) => {
+    if (!username) return;
+    if (get().curriculumUser === username && get().curriculum) return;
+    const cached = loadInitialCurriculumCache(username);
+    set({
+      curriculumUser: username,
+      curriculum: cached,
+      eligibilityMap: {},
+    });
+  },
 
   loadEligibility: async () => {
     try {
@@ -78,17 +97,33 @@ export const useScheduleStore = create((set, get) => ({
   courseError: null,
 
   loadCurriculum: async (force = false) => {
-    if (!force && get().curriculum) return get().curriculum;
+    const authState = useAuthStore.getState();
+    const currentUsername = authState.profile?.username || authState.me?.user?.username || authState.me?.username;
+
+    // If already loaded for the current user and not forced, return cached in memory
+    if (!force && get().curriculum && (!currentUsername || get().curriculumUser === currentUsername)) {
+      return get().curriculum;
+    }
+
+    // Check user-scoped local storage first if not forced
+    if (!force && currentUsername) {
+      const localCached = loadInitialCurriculumCache(currentUsername);
+      if (localCached) {
+        set({ curriculum: localCached, curriculumUser: currentUsername });
+        return localCached;
+      }
+    }
+
     set({ loadingCurriculum: true });
     try {
       const curriculum = await api.curriculum();
-      persistCurriculumCache(curriculum);
-      set({ curriculum, loadingCurriculum: false });
+      persistCurriculumCache(currentUsername, curriculum);
+      set({ curriculum, curriculumUser: currentUsername, loadingCurriculum: false });
       return curriculum;
     } catch (err) {
       set({ loadingCurriculum: false });
-      // Если в кэше уже есть куррикулум, отдаем его без разлогина
-      if (get().curriculum) {
+      // Если в кэше уже есть куррикулум этого пользователя, отдаем его без разлогина
+      if (get().curriculum && (!currentUsername || get().curriculumUser === currentUsername)) {
         console.warn('[scheduleStore] Using locally cached curriculum due to network/API error:', err.message);
         return get().curriculum;
       }
@@ -154,7 +189,17 @@ export const useScheduleStore = create((set, get) => ({
 
   clearAllCache: () => {
     clearScheduleLocalStorage();
-    set({ coursesCache: {}, curriculum: null });
+    set({
+      coursesCache: {},
+      curriculum: null,
+      curriculumUser: null,
+      openCourse: null,
+      draft: NULL_DRAFT,
+      eligibilityMap: {},
+      courseError: null,
+      loadingCurriculum: false,
+      loadingEligibility: false,
+    });
   },
 
   /**

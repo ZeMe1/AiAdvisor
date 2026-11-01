@@ -65,11 +65,12 @@ export async function initDb() {
     );
 
     CREATE TABLE IF NOT EXISTS curriculum_cache (
-      track_id VARCHAR(50) PRIMARY KEY,
+      track_id VARCHAR(255) PRIMARY KEY,
       curriculum JSONB NOT NULL,
       sections_defaults JSONB,
       cached_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
+    ALTER TABLE curriculum_cache ALTER COLUMN track_id TYPE VARCHAR(255);
 
     CREATE TABLE IF NOT EXISTS course_sections_cache (
       cache_key VARCHAR(255) PRIMARY KEY,

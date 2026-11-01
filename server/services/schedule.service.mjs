@@ -8,12 +8,15 @@ export class ScheduleService {
   async getCurriculum(client) {
     if (DEMO) return demo.curriculum();
 
+    const username = client?.localUsername;
+    const cacheKey = (tId) => (username ? `${username}:${tId}` : String(tId));
+
     // 1. Сначала проверяем кэш студента в БД — там уже сохранён trackId
-    const studentData = await cacheRepository.getStudentData(client.localUsername);
+    const studentData = await cacheRepository.getStudentData(username);
     let trackId = studentData?.track?.id;
 
     if (trackId) {
-      const cached = await cacheRepository.getCurriculum(trackId);
+      const cached = await cacheRepository.getCurriculum(cacheKey(trackId));
       if (cached) return cached.curriculum;
     }
 
@@ -28,7 +31,7 @@ export class ScheduleService {
     }
 
     if (!trackId) {
-      const staleStudent = await cacheRepository.getStudentData(client.localUsername, Infinity);
+      const staleStudent = await cacheRepository.getStudentData(username, Infinity);
       trackId = staleStudent?.track?.id;
     }
 
@@ -36,7 +39,7 @@ export class ScheduleService {
       throw HttpError.badGateway('Не найден ID трека на странице course_reg');
     }
 
-    const cached = await cacheRepository.getCurriculum(trackId);
+    const cached = await cacheRepository.getCurriculum(cacheKey(trackId));
     if (cached) return cached.curriculum;
 
     try {
@@ -44,13 +47,13 @@ export class ScheduleService {
       const withParams = curriculum.semesters.flatMap((s) => s.courses).find((c) => c.sectionsParams);
       const sectionsDefaults = withParams?.sectionsParams ?? null;
 
-      await cacheRepository.setCurriculum(trackId, curriculum, sectionsDefaults).catch(console.error);
+      await cacheRepository.setCurriculum(cacheKey(trackId), curriculum, sectionsDefaults).catch(console.error);
       return curriculum;
     } catch (err) {
-      // Fallback на любой ранее сохраненный куррикулум этого трека
-      const stale = await cacheRepository.getCurriculum(trackId, Infinity);
+      // Fallback на любой ранее сохраненный куррикулум этого студента
+      const stale = await cacheRepository.getCurriculum(cacheKey(trackId), Infinity);
       if (stale) {
-        console.warn(`[getCurriculum] Returning stale cached curriculum for track ${trackId} due to:`, err.message);
+        console.warn(`[getCurriculum] Returning stale cached curriculum for ${username} (track ${trackId}) due to:`, err.message);
         return stale.curriculum;
       }
       throw err;
@@ -93,7 +96,8 @@ export class ScheduleService {
     let def = null;
 
     if (trackId) {
-      const cachedCurr = await cacheRepository.getCurriculum(trackId);
+      const userTrackKey = client?.localUsername ? `${client.localUsername}:${trackId}` : String(trackId);
+      const cachedCurr = await cacheRepository.getCurriculum(userTrackKey);
       if (cachedCurr) {
         curriculum = cachedCurr.curriculum;
         def = cachedCurr.sectionsDefaults;
@@ -102,7 +106,7 @@ export class ScheduleService {
           curriculum = await client.getCurriculum(trackId);
           const withParams = curriculum.semesters.flatMap((s) => s.courses).find((c) => c.sectionsParams);
           def = withParams?.sectionsParams ?? null;
-          await cacheRepository.setCurriculum(trackId, curriculum, def).catch(console.error);
+          await cacheRepository.setCurriculum(userTrackKey, curriculum, def).catch(console.error);
         } catch { /* ошибка куррикулума не должна блокировать /api/me */ }
       }
     }
