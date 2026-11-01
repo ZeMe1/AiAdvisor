@@ -66,6 +66,8 @@ export default function AdminPage() {
   const [curriculumStudentInput, setCurriculumStudentInput] = useState('');
   const [curriculumAssignError, setCurriculumAssignError] = useState('');
   const [assigningCurriculumStudent, setAssigningCurriculumStudent] = useState(false);
+  const [showGroupHints, setShowGroupHints] = useState(false);
+  const [showCurriculumHints, setShowCurriculumHints] = useState(false);
 
   // Confirmation Modal state
   const [modalConfig, setModalConfig] = useState({
@@ -163,8 +165,30 @@ export default function AdminPage() {
 
   // Registered students for suggestions
   const studentCandidates = useMemo(() => {
-    return users.filter((u) => !u.is_blocked && u.role === 'Student');
+    return users.filter((u) => !u.is_blocked && (u.role === 'Student' || !u.role));
   }, [users]);
+
+  // Live hints for Group enrollment input
+  const groupStudentHints = useMemo(() => {
+    const q = studentInput.trim().toLowerCase();
+    if (!q) return [];
+    return studentCandidates.filter(
+      (s) =>
+        !groupMembers.some((m) => m.username === s.username) &&
+        (s.username.toLowerCase().includes(q) || (s.display_name && s.display_name.toLowerCase().includes(q)))
+    );
+  }, [studentCandidates, studentInput, groupMembers]);
+
+  // Live hints for Curriculum student assignment input
+  const curriculumStudentHints = useMemo(() => {
+    const q = curriculumStudentInput.trim().toLowerCase();
+    if (!q) return [];
+    return studentCandidates.filter(
+      (s) =>
+        !curriculumStudents.some((m) => m.username === s.username) &&
+        (s.username.toLowerCase().includes(q) || (s.display_name && s.display_name.toLowerCase().includes(q)))
+    );
+  }, [studentCandidates, curriculumStudentInput, curriculumStudents]);
 
   function handleAssignAdvisorPrompt(group, newAdvisorUsername) {
     const targetAdvisor = users.find((u) => u.username === newAdvisorUsername);
@@ -713,13 +737,16 @@ export default function AdminPage() {
                         <td>{g.program}</td>
                         <td>Year {g.study_year}</td>
                         <td>
-                          <button
-                            className="btn btn-mini"
-                            onClick={() => openStudentsModal(g)}
-                            style={{ padding: '3px 10px', fontSize: '12px' }}
-                          >
-                            + Add
-                          </button>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span className="small">{g.member_count || 0} students</span>
+                            <button
+                              className="btn btn-mini"
+                              onClick={() => openStudentsModal(g)}
+                              style={{ padding: '2px 8px', fontSize: '11px' }}
+                            >
+                              + Add
+                            </button>
+                          </div>
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1001,21 +1028,81 @@ export default function AdminPage() {
 
             {/* Form to add a student */}
             <form onSubmit={handleEnrollStudent} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
-              <input
-                required
-                list="registered-students-list"
-                value={studentInput}
-                onChange={(e) => setStudentInput(e.target.value)}
-                placeholder="Enter student login (e.g. 240103199)..."
-                style={{ flex: 1 }}
-              />
-              <datalist id="registered-students-list">
-                {studentCandidates.map((s) => (
-                  <option key={s.username} value={s.username}>
-                    {s.display_name ? `${s.display_name} (@${s.username})` : s.username}
-                  </option>
-                ))}
-              </datalist>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input
+                  required
+                  value={studentInput}
+                  onChange={(e) => {
+                    setStudentInput(e.target.value);
+                    setShowGroupHints(true);
+                    setEnrollError('');
+                  }}
+                  onFocus={() => setShowGroupHints(true)}
+                  onBlur={() => setTimeout(() => setShowGroupHints(false), 200)}
+                  placeholder="Enter student login (e.g. 240103191)..."
+                  style={{ width: '100%' }}
+                />
+
+                {showGroupHints && groupStudentHints.length > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      marginTop: 4,
+                      backgroundColor: '#fff',
+                      border: '1px solid #cce0ff',
+                      borderRadius: 6,
+                      boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+                      maxHeight: 180,
+                      overflowY: 'auto',
+                      zIndex: 100,
+                    }}
+                  >
+                    {groupStudentHints.map((s) => (
+                      <div
+                        key={s.username}
+                        onMouseDown={() => {
+                          setStudentInput(s.username);
+                          setShowGroupHints(false);
+                        }}
+                        style={{
+                          padding: '8px 12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f0f0f0',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f4f8fd')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}
+                      >
+                        <div>
+                          <b className="code">{s.username}</b>
+                          {s.display_name && (
+                            <span style={{ marginLeft: 8, fontSize: '13px', color: '#333' }}>
+                              {s.display_name}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            backgroundColor: '#e6f4ea',
+                            color: '#137333',
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Student
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 type="submit"
                 className="btn btn-primary"
@@ -1381,16 +1468,81 @@ export default function AdminPage() {
 
             {/* Input to assign student */}
             <form onSubmit={handleAssignCurriculumStudent} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-              <input
-                required
-                placeholder="Enter student username (e.g. 240103191)..."
-                value={curriculumStudentInput}
-                onChange={(e) => {
-                  setCurriculumStudentInput(e.target.value);
-                  setCurriculumAssignError('');
-                }}
-                style={{ flex: 1 }}
-              />
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input
+                  required
+                  placeholder="Enter student username (e.g. 240103191)..."
+                  value={curriculumStudentInput}
+                  onChange={(e) => {
+                    setCurriculumStudentInput(e.target.value);
+                    setShowCurriculumHints(true);
+                    setCurriculumAssignError('');
+                  }}
+                  onFocus={() => setShowCurriculumHints(true)}
+                  onBlur={() => setTimeout(() => setShowCurriculumHints(false), 200)}
+                  style={{ width: '100%' }}
+                />
+
+                {showCurriculumHints && curriculumStudentHints.length > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      marginTop: 4,
+                      backgroundColor: '#fff',
+                      border: '1px solid #cce0ff',
+                      borderRadius: 6,
+                      boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+                      maxHeight: 180,
+                      overflowY: 'auto',
+                      zIndex: 100,
+                    }}
+                  >
+                    {curriculumStudentHints.map((s) => (
+                      <div
+                        key={s.username}
+                        onMouseDown={() => {
+                          setCurriculumStudentInput(s.username);
+                          setShowCurriculumHints(false);
+                        }}
+                        style={{
+                          padding: '8px 12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f0f0f0',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f4f8fd')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}
+                      >
+                        <div>
+                          <b className="code">{s.username}</b>
+                          {s.display_name && (
+                            <span style={{ marginLeft: 8, fontSize: '13px', color: '#333' }}>
+                              {s.display_name}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            backgroundColor: '#e6f4ea',
+                            color: '#137333',
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Student
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 type="submit"
                 className="btn btn-primary"
