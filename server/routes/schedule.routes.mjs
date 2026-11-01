@@ -11,6 +11,7 @@ router.use(requireAuth);
 
 router.get('/me', asyncHandler((req, res) => scheduleController.getMe(req, res)));
 router.get('/curriculum', asyncHandler((req, res) => scheduleController.getCurriculum(req, res)));
+router.get('/eligibility', asyncHandler((req, res) => scheduleController.getEligibility(req, res)));
 router.get('/sections', validateQuery(sectionsQuerySchema), asyncHandler((req, res) => scheduleController.getSections(req, res)));
 router.get('/search', validateQuery(searchQuerySchema), asyncHandler((req, res) => scheduleController.search(req, res)));
 router.post('/electives', validateBody(electivesBodySchema), asyncHandler((req, res) => scheduleController.getElectives(req, res)));

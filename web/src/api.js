@@ -27,6 +27,7 @@ export const api = {
   logout: () => j('/api/auth/logout', { method: 'POST' }),
   me: (refresh = false) => j(`/api/me${refresh ? '?refresh=1' : ''}`),
   curriculum: () => j('/api/curriculum'),
+  eligibility: () => j('/api/eligibility'),
   sections: (code, mufSqId) =>
     j(`/api/sections?code=${encodeURIComponent(code)}${mufSqId ? `&mufSqId=${encodeURIComponent(mufSqId)}` : ''}`),
   search: (code) => j(`/api/search?code=${encodeURIComponent(code)}`),

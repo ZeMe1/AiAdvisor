@@ -76,6 +76,17 @@ export async function initDb() {
       data JSONB NOT NULL,
       cached_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS prerequisites (
+      id SERIAL PRIMARY KEY,
+      course_code VARCHAR(32) NOT NULL,
+      prereq_course_code VARCHAR(32) NOT NULL,
+      min_grade VARCHAR(8) DEFAULT 'D',
+      type VARCHAR(16) DEFAULT 'prerequisite',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      UNIQUE(course_code, prereq_course_code)
+    );
+    CREATE INDEX IF NOT EXISTS idx_prereq_course ON prerequisites(course_code);
   `);
   console.log('Database initialized with sessions & caching tables.');
 }

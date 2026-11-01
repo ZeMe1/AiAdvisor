@@ -1,4 +1,5 @@
 import { scheduleService } from '../services/schedule.service.mjs';
+import { prerequisiteService } from '../services/prerequisite.service.mjs';
 
 export class ScheduleController {
   async getMe(req, res) {
@@ -10,6 +11,12 @@ export class ScheduleController {
   async getCurriculum(req, res) {
     const data = await scheduleService.getCurriculum(req.client);
     res.json(data);
+  }
+
+  async getEligibility(req, res) {
+    const curriculum = await scheduleService.getCurriculum(req.client);
+    const result = await prerequisiteService.evaluateCurriculum(curriculum);
+    res.json(result);
   }
 
   async getSections(req, res) {
