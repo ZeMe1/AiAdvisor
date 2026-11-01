@@ -51,4 +51,7 @@ export const api = {
   adminGetCurriculumDetails: (id) => j(`/api/admin/curriculums/${id}`),
   adminSetCurriculumPublished: (id, is_published) => j(`/api/admin/curriculums/${id}/publish`, { method: 'PATCH', body: JSON.stringify({ is_published }) }),
   adminDeleteCurriculum: (id) => j(`/api/admin/curriculums/${id}`, { method: 'DELETE' }),
+  adminGetCurriculumStudents: (id) => j(`/api/admin/curriculums/${id}/students`),
+  adminAssignCurriculumStudent: (id, username) => j(`/api/admin/curriculums/${id}/students`, post({ username })),
+  adminRemoveCurriculumStudent: (id, username) => j(`/api/admin/curriculums/${id}/students/${encodeURIComponent(username)}`, { method: 'DELETE' }),
 };

@@ -94,6 +94,26 @@ export class AdminController {
     const result = await curriculumService.deleteCurriculum(id);
     res.json(result);
   }
+
+  async listCurriculumStudents(req, res) {
+    const id = parseInt(req.params.id, 10);
+    const list = await curriculumService.listAssignedStudents(id);
+    res.json(list);
+  }
+
+  async assignCurriculumStudent(req, res) {
+    const id = parseInt(req.params.id, 10);
+    const { username } = req.body;
+    const list = await curriculumService.assignStudent(id, username);
+    res.json(list);
+  }
+
+  async removeCurriculumStudent(req, res) {
+    const id = parseInt(req.params.id, 10);
+    const { username } = req.params;
+    const list = await curriculumService.removeStudent(id, username);
+    res.json(list);
+  }
 }
 
 export const adminController = new AdminController();

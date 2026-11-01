@@ -32,5 +32,8 @@ router.post('/curriculums', asyncHandler((req, res) => adminController.importCur
 router.get('/curriculums/:id', asyncHandler((req, res) => adminController.getCurriculum(req, res)));
 router.patch('/curriculums/:id/publish', asyncHandler((req, res) => adminController.setCurriculumPublished(req, res)));
 router.delete('/curriculums/:id', asyncHandler((req, res) => adminController.deleteCurriculum(req, res)));
+router.get('/curriculums/:id/students', asyncHandler((req, res) => adminController.listCurriculumStudents(req, res)));
+router.post('/curriculums/:id/students', asyncHandler((req, res) => adminController.assignCurriculumStudent(req, res)));
+router.delete('/curriculums/:id/students/:username', asyncHandler((req, res) => adminController.removeCurriculumStudent(req, res)));
 
 export default router;

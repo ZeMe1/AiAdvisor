@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { curriculumRepository } from '../repositories/curriculum.repository.mjs';
 import { groupRepository } from '../repositories/group.repository.mjs';
+import { userRepository } from '../repositories/user.repository.mjs';
 import { HttpError } from '../errors/http-error.mjs';
 
 export class CurriculumService {
@@ -255,14 +256,53 @@ export class CurriculumService {
     return { success: true };
   }
 
-  async getCurriculumForStudent(username, studentCompletedCourses = []) {
+  async listAssignedStudents(curriculumId) {
+    const curr = await curriculumRepository.getCurriculumById(curriculumId);
+    if (!curr) throw HttpError.notFound('Curriculum not found');
+    return curriculumRepository.listAssignedStudents(curriculumId);
+  }
+
+  async assignStudent(curriculumId, username) {
+    const curr = await curriculumRepository.getCurriculumById(curriculumId);
+    if (!curr) throw HttpError.notFound('Curriculum not found');
+
+    const cleanUsername = String(username || '').trim();
+    if (!cleanUsername) throw HttpError.badRequest('Username cannot be empty');
+
+    const user = await userRepository.findByUsername(cleanUsername);
+    if (!user) {
+      throw HttpError.badRequest(`User '${cleanUsername}' does not exist on the platform`);
+    }
+
+    await curriculumRepository.assignStudent(curriculumId, cleanUsername);
+    return curriculumRepository.listAssignedStudents(curriculumId);
+  }
+
+  async removeStudent(curriculumId, username) {
+    const curr = await curriculumRepository.getCurriculumById(curriculumId);
+    if (!curr) throw HttpError.notFound('Curriculum not found');
+
+    const cleanUsername = String(username || '').trim();
+    await curriculumRepository.removeStudent(curriculumId, cleanUsername);
+    return curriculumRepository.listAssignedStudents(curriculumId);
+  }
+
+  async getCurriculumForStudent(username, studentCompletedCourses = [], sduCurriculum = null) {
     if (!username) return null;
 
-    const membership = await groupRepository.getStudentGroupAndAdvisor(username);
-    if (!membership) return null;
+    // 1. Direct student-to-curriculum assignment
+    let published = await curriculumRepository.getAssignedCurriculumForUser(username);
+    let trackName = published?.version_title || 'Assigned Track';
 
-    // Check if there is an active published curriculum for this group's program
-    const published = await curriculumRepository.findPublishedCurriculum(membership.program);
+    // 2. Fallback: group membership published curriculum
+    if (!published) {
+      const membership = await groupRepository.getStudentGroupAndAdvisor(username);
+      if (membership) {
+        published = await curriculumRepository.findPublishedCurriculum(membership.program);
+        trackName = membership.group_name;
+      }
+    }
+
     if (!published) return null;
 
     const courses = await curriculumRepository.getCurriculumCourses(published.id);
@@ -275,13 +315,26 @@ export class CurriculumService {
       }
     }
 
+    // Map SDU curriculum courses to preserve sectionsParams, mufSqId, etc.
+    const sduCoursesMap = new Map();
+    if (sduCurriculum?.semesters) {
+      for (const s of sduCurriculum.semesters) {
+        for (const sc of s.courses || []) {
+          if (sc.code) {
+            sduCoursesMap.set(sc.code.toUpperCase().trim(), sc);
+          }
+        }
+      }
+    }
+
     const semMap = new Map();
     for (const c of courses) {
       const cleanCode = c.course_code.toUpperCase().trim();
       const userCourse = completedMap.get(cleanCode);
+      const sduCourse = sduCoursesMap.get(cleanCode);
 
-      const status = userCourse ? userCourse.status : 'not_taken';
-      const grade = userCourse ? userCourse.grade : null;
+      const status = userCourse ? userCourse.status : (sduCourse?.status || 'not_taken');
+      const grade = userCourse ? userCourse.grade : (sduCourse?.grade || null);
 
       if (!semMap.has(c.semester)) semMap.set(c.semester, []);
       semMap.get(c.semester).push({
@@ -291,6 +344,10 @@ export class CurriculumService {
         status,
         grade,
         type: c.course_type,
+        sectionsParams: sduCourse?.sectionsParams,
+        mufSqId: sduCourse?.mufSqId,
+        elective: sduCourse?.elective,
+        isElective: Boolean(c.course_type && c.course_type.toLowerCase().includes('elective')),
       });
     }
 
@@ -306,7 +363,7 @@ export class CurriculumService {
         title: published.version_title,
         year: published.academic_year,
         name: published.program,
-        track: membership.group_name,
+        track: trackName,
       },
       semesters,
     };

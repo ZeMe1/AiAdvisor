@@ -175,4 +175,43 @@ describe('US14: Import the Curriculum Plan', () => {
     expect(css108.status).toBe('not_taken');
     expect(css108.grade).toBeNull();
   }, 15000);
+
+  it('Scenario 5: Administrator directly assigns student to a curriculum, and student receives this curriculum', async () => {
+    // 1. Create student and curriculum
+    await userRepository.findOrCreateUser('test_curr_assigned_student');
+
+    const curr = await curriculumService.importCurriculum({
+      program: 'TEST-Cybersecurity',
+      academic_year: 2026,
+      version_title: 'TEST-Cybersecurity 2026',
+      is_published: false,
+      rawCourses: [
+        { semester: 1, course_code: 'INF 318', course_name: 'Computer Networks', ects: 5, course_type: 'Mandatory' },
+        { semester: 1, course_code: 'INF 376', course_name: 'Information Security', ects: 5, course_type: 'Mandatory' },
+      ],
+    });
+
+    // 2. Assign student to curriculum
+    let students = await curriculumService.assignStudent(curr.curriculum.id, 'test_curr_assigned_student');
+    expect(students).toHaveLength(1);
+    expect(students[0].username).toBe('test_curr_assigned_student');
+
+    // 3. Fails when assigning non-existent user
+    await expect(
+      curriculumService.assignStudent(curr.curriculum.id, 'ghost_nonexistent_user')
+    ).rejects.toThrow(/does not exist on the platform/);
+
+    // 4. Fetching curriculum for student returns this assigned curriculum
+    const studentCurriculum = await curriculumService.getCurriculumForStudent('test_curr_assigned_student', []);
+    expect(studentCurriculum).not.toBeNull();
+    expect(studentCurriculum.program.title).toBe('TEST-Cybersecurity 2026');
+    expect(studentCurriculum.semesters[0].courses.map((c) => c.code)).toContain('INF 318');
+
+    // 5. Remove assignment
+    students = await curriculumService.removeStudent(curr.curriculum.id, 'test_curr_assigned_student');
+    expect(students).toHaveLength(0);
+
+    const afterRemove = await curriculumService.getCurriculumForStudent('test_curr_assigned_student', []);
+    expect(afterRemove).toBeNull();
+  }, 15000);
 });

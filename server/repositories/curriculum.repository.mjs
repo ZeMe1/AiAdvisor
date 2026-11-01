@@ -78,14 +78,55 @@ export class CurriculumRepository {
         c.version_title, 
         c.is_published, 
         c.created_at,
-        COUNT(cc.id)::int AS course_count,
-        COALESCE(MAX(cc.semester), 0)::int AS max_semester
+        COUNT(DISTINCT cc.id)::int AS course_count,
+        COALESCE(MAX(cc.semester), 0)::int AS max_semester,
+        COUNT(DISTINCT uc.username)::int AS student_count
       FROM program_curriculums c
       LEFT JOIN program_curriculum_courses cc ON cc.curriculum_id = c.id
+      LEFT JOIN user_curriculums uc ON uc.curriculum_id = c.id
       GROUP BY c.id
       ORDER BY c.created_at DESC
     `);
     return res.rows;
+  }
+
+  async assignStudent(curriculumId, username) {
+    const res = await pool.query(`
+      INSERT INTO user_curriculums (username, curriculum_id, assigned_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (username)
+      DO UPDATE SET curriculum_id = EXCLUDED.curriculum_id, assigned_at = NOW()
+      RETURNING *
+    `, [username, curriculumId]);
+    return res.rows[0];
+  }
+
+  async removeStudent(curriculumId, username) {
+    await pool.query(
+      'DELETE FROM user_curriculums WHERE curriculum_id = $1 AND username = $2',
+      [curriculumId, username]
+    );
+  }
+
+  async listAssignedStudents(curriculumId) {
+    const res = await pool.query(`
+      SELECT uc.username, uc.assigned_at, u.display_name, u.role
+      FROM user_curriculums uc
+      JOIN users u ON u.username = uc.username
+      WHERE uc.curriculum_id = $1
+      ORDER BY uc.assigned_at DESC
+    `, [curriculumId]);
+    return res.rows;
+  }
+
+  async getAssignedCurriculumForUser(username) {
+    const res = await pool.query(`
+      SELECT c.id, c.program, c.academic_year, c.version_title, c.is_published, c.created_at
+      FROM user_curriculums uc
+      JOIN program_curriculums c ON c.id = uc.curriculum_id
+      WHERE uc.username = $1
+    `, [username]);
+    return res.rows[0] || null;
   }
 
   async getCurriculumById(id) {

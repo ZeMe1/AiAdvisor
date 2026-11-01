@@ -59,6 +59,14 @@ export default function AdminPage() {
   const [viewCurriculum, setViewCurriculum] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
+  // Assign Students to Curriculum Modal state
+  const [selectedCurriculumForStudents, setSelectedCurriculumForStudents] = useState(null);
+  const [curriculumStudents, setCurriculumStudents] = useState([]);
+  const [loadingCurriculumStudents, setLoadingCurriculumStudents] = useState(false);
+  const [curriculumStudentInput, setCurriculumStudentInput] = useState('');
+  const [curriculumAssignError, setCurriculumAssignError] = useState('');
+  const [assigningCurriculumStudent, setAssigningCurriculumStudent] = useState(false);
+
   // Confirmation Modal state
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
@@ -443,6 +451,68 @@ export default function AdminPage() {
     URL.revokeObjectURL(url);
   }
 
+  async function openCurriculumStudentsModal(curr) {
+    setSelectedCurriculumForStudents(curr);
+    setCurriculumStudentInput('');
+    setCurriculumAssignError('');
+    setLoadingCurriculumStudents(true);
+    try {
+      const members = await api.adminGetCurriculumStudents(curr.id);
+      setCurriculumStudents(members);
+    } catch (e) {
+      toast.error('Failed to load students: ' + e.message);
+    } finally {
+      setLoadingCurriculumStudents(false);
+    }
+  }
+
+  async function handleAssignCurriculumStudent(e) {
+    e.preventDefault();
+    const username = curriculumStudentInput.trim();
+    if (!username || !selectedCurriculumForStudents) return;
+
+    setAssigningCurriculumStudent(true);
+    setCurriculumAssignError('');
+    try {
+      const updated = await api.adminAssignCurriculumStudent(selectedCurriculumForStudents.id, username);
+      setCurriculumStudents(updated);
+      setCurriculums((prev) =>
+        prev.map((c) => (c.id === selectedCurriculumForStudents.id ? { ...c, student_count: updated.length } : c))
+      );
+      setCurriculumStudentInput('');
+      toast.success(`Student ${username} assigned to ${selectedCurriculumForStudents.version_title}`);
+    } catch (e) {
+      setCurriculumAssignError(e.message);
+      toast.error('Failed to assign student: ' + e.message);
+    } finally {
+      setAssigningCurriculumStudent(false);
+    }
+  }
+
+  function handleRemoveCurriculumStudentPrompt(username) {
+    if (!selectedCurriculumForStudents) return;
+    setModalConfig({
+      isOpen: true,
+      title: 'Remove Student from Curriculum',
+      message: `Are you sure you want to unassign student ${username} from ${selectedCurriculumForStudents.version_title}?`,
+      confirmText: 'Unassign Student',
+      isDanger: true,
+      onConfirm: async () => {
+        setModalConfig((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const updated = await api.adminRemoveCurriculumStudent(selectedCurriculumForStudents.id, username);
+          setCurriculumStudents(updated);
+          setCurriculums((prev) =>
+            prev.map((c) => (c.id === selectedCurriculumForStudents.id ? { ...c, student_count: updated.length } : c))
+          );
+          toast.success(`Student ${username} unassigned from curriculum`);
+        } catch (e) {
+          toast.error('Failed to unassign student: ' + e.message);
+        }
+      },
+    });
+  }
+
   // Filtered lists
   const filteredUsers = useMemo(() => {
     if (!userSearch.trim()) return users;
@@ -735,6 +805,7 @@ export default function AdminPage() {
                       <th>Version Title</th>
                       <th>Year</th>
                       <th>Courses / Semesters</th>
+                      <th>Assigned Students</th>
                       <th>Status</th>
                       <th>Actions</th>
                     </tr>
@@ -742,7 +813,7 @@ export default function AdminPage() {
                   <tbody>
                     {filteredCurriculums.length === 0 && (
                       <tr>
-                        <td colSpan="6" className="c muted">No program curriculums found. Click "+ Import Curriculum" to upload one.</td>
+                        <td colSpan="7" className="c muted">No program curriculums found. Click "+ Import Curriculum" to upload one.</td>
                       </tr>
                     )}
                     {filteredCurriculums.map((c) => (
@@ -752,6 +823,18 @@ export default function AdminPage() {
                         <td>{c.academic_year}</td>
                         <td>
                           {c.course_count} courses ({c.max_semester} semesters)
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span className="small">{c.student_count || 0} students</span>
+                            <button
+                              className="btn btn-mini"
+                              onClick={() => openCurriculumStudentsModal(c)}
+                              style={{ padding: '2px 8px', fontSize: '11px' }}
+                            >
+                              + Assign
+                            </button>
+                          </div>
                         </td>
                         <td>
                           {c.is_published ? (
@@ -1281,6 +1364,109 @@ export default function AdminPage() {
                 onClick={() => setViewCurriculum(null)}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: ASSIGN STUDENTS TO CURRICULUM (US14) ================= */}
+      {selectedCurriculumForStudents && (
+        <div className="modal-backdrop">
+          <div className="card modal-card" style={{ maxWidth: 580, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginTop: 0 }}>Assign Students to Curriculum</h3>
+            <p className="muted small" style={{ marginTop: '-0.5rem', marginBottom: '1.25rem' }}>
+              Students assigned to <b>{selectedCurriculumForStudents.version_title}</b> ({selectedCurriculumForStudents.program}) will see this curriculum on both their Main Schedule and Roadmap.
+            </p>
+
+            {/* Input to assign student */}
+            <form onSubmit={handleAssignCurriculumStudent} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              <input
+                required
+                placeholder="Enter student username (e.g. 240103191)..."
+                value={curriculumStudentInput}
+                onChange={(e) => {
+                  setCurriculumStudentInput(e.target.value);
+                  setCurriculumAssignError('');
+                }}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={assigningCurriculumStudent || !curriculumStudentInput.trim()}
+              >
+                {assigningCurriculumStudent ? 'Assigning...' : 'Assign Student'}
+              </button>
+            </form>
+
+            {curriculumAssignError && (
+              <div
+                style={{
+                  backgroundColor: '#fce8e6',
+                  color: '#c5221f',
+                  border: '1px solid #f5c6cb',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  marginBottom: '1rem',
+                  fontWeight: 500,
+                }}
+              >
+                ⚠️ {curriculumAssignError}
+              </div>
+            )}
+
+            {/* Table of assigned students */}
+            {loadingCurriculumStudents ? (
+              <p className="muted">Loading assigned students...</p>
+            ) : curriculumStudents.length === 0 ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center', backgroundColor: '#f9f9f9', borderRadius: 6 }}>
+                <p className="muted" style={{ margin: 0 }}>
+                  No students are directly assigned to <b>{selectedCurriculumForStudents.version_title}</b> yet.
+                  <br />
+                  <span className="small">Enter a student login above to assign them.</span>
+                </p>
+              </div>
+            ) : (
+              <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                <table className="tbl" style={{ margin: 0 }}>
+                  <thead>
+                    <tr>
+                      <th>Student Login</th>
+                      <th>Display Name</th>
+                      <th>Assigned Date</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {curriculumStudents.map((m) => (
+                      <tr key={m.username}>
+                        <td><b className="code">{m.username}</b></td>
+                        <td>{m.display_name || <span className="muted">—</span>}</td>
+                        <td className="small">{new Date(m.assigned_at).toLocaleDateString()}</td>
+                        <td>
+                          <button
+                            className="btn btn-danger btn-mini"
+                            onClick={() => handleRemoveCurriculumStudentPrompt(m.username)}
+                            style={{ padding: '2px 6px', fontSize: '11px' }}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <button
+                className="btn"
+                onClick={() => setSelectedCurriculumForStudents(null)}
+              >
+                Done
               </button>
             </div>
           </div>

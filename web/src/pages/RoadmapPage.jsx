@@ -28,13 +28,11 @@ export default function RoadmapPage() {
   }, []);
 
   useEffect(() => {
-    if (!curriculum) {
-      loadCurriculum().catch(console.error);
-    }
+    loadCurriculum(true).catch(console.error);
     if (!eligibilityMap || Object.keys(eligibilityMap).length === 0) {
       loadEligibility().catch(console.error);
     }
-  }, [curriculum, loadCurriculum, eligibilityMap, loadEligibility]);
+  }, [loadCurriculum, eligibilityMap, loadEligibility]);
 
   const activeCurriculum = roadmapCurriculum || curriculum;
   const semesters = activeCurriculum?.semesters ?? [];

@@ -135,6 +135,13 @@ export async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_curr_courses_curriculum ON program_curriculum_courses(curriculum_id);
 
+    CREATE TABLE IF NOT EXISTS user_curriculums (
+      username VARCHAR(255) PRIMARY KEY REFERENCES users(username) ON DELETE CASCADE,
+      curriculum_id INT NOT NULL REFERENCES program_curriculums(id) ON DELETE CASCADE,
+      assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_curriculums_curr_id ON user_curriculums(curriculum_id);
+
     -- Seed standard course catalog if empty
     INSERT INTO course_catalog (code, name, ects)
     VALUES

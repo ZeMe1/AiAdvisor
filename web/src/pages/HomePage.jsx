@@ -23,7 +23,7 @@ export default function HomePage() {
   toastRef.current = toast;
 
   useEffect(() => {
-    loadCurriculum().catch((err) => {
+    loadCurriculum(true).catch((err) => {
       toastRef.current.error('Failed to load curriculum: ' + err.message);
     });
     loadEligibility().catch(console.error);
