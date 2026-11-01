@@ -94,8 +94,7 @@ export class CurriculumRepository {
     const res = await pool.query(`
       INSERT INTO user_curriculums (username, curriculum_id, assigned_at)
       VALUES ($1, $2, NOW())
-      ON CONFLICT (username)
-      DO UPDATE SET curriculum_id = EXCLUDED.curriculum_id, assigned_at = NOW()
+      ON CONFLICT (username, curriculum_id) DO NOTHING
       RETURNING *
     `, [username, curriculumId]);
     return res.rows[0];
@@ -119,14 +118,20 @@ export class CurriculumRepository {
     return res.rows;
   }
 
-  async getAssignedCurriculumForUser(username) {
+  async listAssignedCurriculumsForUser(username) {
     const res = await pool.query(`
-      SELECT c.id, c.program, c.academic_year, c.version_title, c.is_published, c.created_at
+      SELECT c.id, c.program, c.academic_year, c.version_title, c.is_published, c.created_at, uc.assigned_at
       FROM user_curriculums uc
       JOIN program_curriculums c ON c.id = uc.curriculum_id
       WHERE uc.username = $1
+      ORDER BY uc.assigned_at ASC
     `, [username]);
-    return res.rows[0] || null;
+    return res.rows;
+  }
+
+  async getAssignedCurriculumForUser(username) {
+    const list = await this.listAssignedCurriculumsForUser(username);
+    return list[0] || null;
   }
 
   async getCurriculumById(id) {

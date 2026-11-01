@@ -274,6 +274,14 @@ export class CurriculumService {
       throw HttpError.badRequest(`User '${cleanUsername}' does not exist on the platform`);
     }
 
+    const currentAssignments = await curriculumRepository.listAssignedCurriculumsForUser(cleanUsername);
+    const alreadyAssigned = currentAssignments.some((c) => c.id === curriculumId);
+    if (!alreadyAssigned && currentAssignments.length >= 2) {
+      throw HttpError.badRequest(
+        'Student has already reached the maximum limit of 3 curriculums (including the official SDU portal curriculum)'
+      );
+    }
+
     await curriculumRepository.assignStudent(curriculumId, cleanUsername);
     return curriculumRepository.listAssignedStudents(curriculumId);
   }
@@ -285,6 +293,100 @@ export class CurriculumService {
     const cleanUsername = String(username || '').trim();
     await curriculumRepository.removeStudent(curriculumId, cleanUsername);
     return curriculumRepository.listAssignedStudents(curriculumId);
+  }
+
+  async getRoadmapCurriculumsForStudent(username, studentCompletedCourses = [], sduCurriculum = null) {
+    const curriculums = [];
+
+    // 1. Official SDU portal curriculum
+    if (sduCurriculum && sduCurriculum.semesters) {
+      curriculums.push({
+        id: 'sdu',
+        title: sduCurriculum.program?.title ? `${sduCurriculum.program.title} (SDU Portal)` : 'SDU Portal Curriculum (Official)',
+        program: sduCurriculum.program?.name || 'SDU',
+        year: sduCurriculum.program?.year || new Date().getFullYear(),
+        track: sduCurriculum.program?.track || 'Official Track',
+        is_default: true,
+        semesters: sduCurriculum.semesters,
+      });
+    }
+
+    // 2. Assigned administrator curriculums (up to 2 custom, max 3 total including SDU)
+    if (username) {
+      let assignedList = await curriculumRepository.listAssignedCurriculumsForUser(username);
+
+      if (assignedList.length === 0) {
+        const membership = await groupRepository.getStudentGroupAndAdvisor(username);
+        if (membership) {
+          const published = await curriculumRepository.findPublishedCurriculum(membership.program);
+          if (published) {
+            assignedList = [published];
+          }
+        }
+      }
+
+      const completedMap = new Map();
+      for (const sc of studentCompletedCourses) {
+        if (sc.code) completedMap.set(sc.code.toUpperCase().trim(), sc);
+      }
+
+      const sduCoursesMap = new Map();
+      if (sduCurriculum?.semesters) {
+        for (const s of sduCurriculum.semesters) {
+          for (const sc of s.courses || []) {
+            if (sc.code) sduCoursesMap.set(sc.code.toUpperCase().trim(), sc);
+          }
+        }
+      }
+
+      for (const curr of assignedList) {
+        if (curriculums.length >= 3) break;
+
+        const courses = await curriculumRepository.getCurriculumCourses(curr.id);
+        const semMap = new Map();
+
+        for (const c of courses) {
+          const cleanCode = c.course_code.toUpperCase().trim();
+          const userCourse = completedMap.get(cleanCode);
+          const sduCourse = sduCoursesMap.get(cleanCode);
+
+          const status = userCourse ? userCourse.status : (sduCourse?.status || 'not_taken');
+          const grade = userCourse ? userCourse.grade : (sduCourse?.grade || null);
+
+          if (!semMap.has(c.semester)) semMap.set(c.semester, []);
+          semMap.get(c.semester).push({
+            code: cleanCode,
+            name: c.course_name,
+            ects: String(c.ects),
+            status,
+            grade,
+            type: c.course_type,
+            sectionsParams: sduCourse?.sectionsParams,
+            mufSqId: sduCourse?.mufSqId,
+            elective: sduCourse?.elective,
+            isElective: Boolean(c.course_type && c.course_type.toLowerCase().includes('elective')),
+          });
+        }
+
+        const semesters = Array.from(semMap.entries())
+          .sort(([a], [b]) => a - b)
+          .map(([no, sCourses]) => ({ no, courses: sCourses }));
+
+        curriculums.push({
+          id: curr.id,
+          title: curr.version_title,
+          program: curr.program,
+          year: curr.academic_year,
+          track: curr.version_title,
+          is_default: false,
+          semesters,
+        });
+      }
+    }
+
+    return {
+      curriculums: curriculums.slice(0, 3),
+    };
   }
 
   async getCurriculumForStudent(username, studentCompletedCourses = [], sduCurriculum = null) {

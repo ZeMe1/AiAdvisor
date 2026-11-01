@@ -214,4 +214,55 @@ describe('US14: Import the Curriculum Plan', () => {
     const afterRemove = await curriculumService.getCurriculumForStudent('test_curr_assigned_student', []);
     expect(afterRemove).toBeNull();
   }, 15000);
+
+  it('Scenario 6: Max 3 curriculums limit (including SDU portal) and roadmap switcher support', async () => {
+    await userRepository.findOrCreateUser('test_curr_switcher_student');
+
+    // Create 3 custom curriculums
+    const c1 = await curriculumService.importCurriculum({
+      program: 'TEST-Track-1',
+      academic_year: 2024,
+      version_title: 'TEST-Track 1',
+      rawCourses: [{ semester: 1, course_code: 'CSS 105', course_name: 'Prog 1', ects: 5, course_type: 'Mandatory' }],
+    });
+    const c2 = await curriculumService.importCurriculum({
+      program: 'TEST-Track-2',
+      academic_year: 2025,
+      version_title: 'TEST-Track 2',
+      rawCourses: [{ semester: 1, course_code: 'CSS 108', course_name: 'Prog 2', ects: 5, course_type: 'Mandatory' }],
+    });
+    const c3 = await curriculumService.importCurriculum({
+      program: 'TEST-Track-3',
+      academic_year: 2026,
+      version_title: 'TEST-Track 3',
+      rawCourses: [{ semester: 1, course_code: 'CSS 215', course_name: 'DSA', ects: 5, course_type: 'Mandatory' }],
+    });
+
+    // Assign 1st custom curriculum
+    await curriculumService.assignStudent(c1.curriculum.id, 'test_curr_switcher_student');
+    // Assign 2nd custom curriculum
+    await curriculumService.assignStudent(c2.curriculum.id, 'test_curr_switcher_student');
+
+    // Attempting to assign 3rd custom curriculum must fail (since SDU portal counts as 1, max total is 3)
+    await expect(
+      curriculumService.assignStudent(c3.curriculum.id, 'test_curr_switcher_student')
+    ).rejects.toThrow(/maximum limit of 3 curriculums/);
+
+    // Verify roadmap options: SDU + 2 assigned = 3 total
+    const mockSdu = {
+      program: { title: 'Official SDU', name: 'SDU IS', track: 'Official' },
+      semesters: [{ no: 1, courses: [{ code: 'CSS 105', name: 'Prog 1', ects: '5', status: 'passed', grade: 'A' }] }],
+    };
+
+    const roadmapData = await curriculumService.getRoadmapCurriculumsForStudent(
+      'test_curr_switcher_student',
+      [{ code: 'CSS 105', status: 'passed', grade: 'A' }],
+      mockSdu
+    );
+
+    expect(roadmapData.curriculums).toHaveLength(3);
+    expect(roadmapData.curriculums[0].id).toBe('sdu');
+    expect(roadmapData.curriculums[1].title).toBe('TEST-Track 1');
+    expect(roadmapData.curriculums[2].title).toBe('TEST-Track 2');
+  }, 15000);
 });

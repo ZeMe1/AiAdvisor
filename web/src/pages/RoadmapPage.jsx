@@ -10,15 +10,23 @@ export default function RoadmapPage() {
   const { me } = useAuthStore();
   const { curriculum, loadCurriculum, eligibilityMap, loadEligibility } = useScheduleStore();
 
-  const [roadmapCurriculum, setRoadmapCurriculum] = useState(null);
+  const [roadmapList, setRoadmapList] = useState([]);
+  const [selectedCurriculumId, setSelectedCurriculumId] = useState('sdu');
   const [selectedCourse, setSelectedCourse] = useState(null);
 
   useEffect(() => {
     let mounted = true;
     api.roadmap()
       .then((res) => {
-        if (mounted && res?.semesters?.length) {
-          setRoadmapCurriculum(res);
+        if (mounted && Array.isArray(res?.curriculums) && res.curriculums.length > 0) {
+          setRoadmapList(res.curriculums);
+          // Prefer assigned admin curriculum if available, else first in list
+          const assigned = res.curriculums.find((c) => !c.is_default);
+          if (assigned) {
+            setSelectedCurriculumId(assigned.id);
+          } else {
+            setSelectedCurriculumId(res.curriculums[0].id);
+          }
         }
       })
       .catch((err) => {
@@ -34,7 +42,15 @@ export default function RoadmapPage() {
     }
   }, [loadCurriculum, eligibilityMap, loadEligibility]);
 
-  const activeCurriculum = roadmapCurriculum || curriculum;
+  const activeCurriculum = useMemo(() => {
+    if (roadmapList.length > 0) {
+      const found = roadmapList.find((c) => String(c.id) === String(selectedCurriculumId));
+      if (found) return found;
+      return roadmapList[0];
+    }
+    return curriculum;
+  }, [roadmapList, selectedCurriculumId, curriculum]);
+
   const semesters = activeCurriculum?.semesters ?? [];
 
   // Вычисляем ECTS прогресс
@@ -100,9 +116,9 @@ export default function RoadmapPage() {
           <h1 style={{ display: 'inline-block', margin: 0, fontSize: '1.4rem' }}>
             Curriculum Roadmap
           </h1>
-          {curriculum?.program?.title && (
+          {activeCurriculum?.program?.title && (
             <div className="muted small" style={{ marginTop: '4px' }}>
-              {curriculum.program.title} {curriculum.program.track && `· ${curriculum.program.track}`}
+              {activeCurriculum.program.title} {activeCurriculum.program.track && `· ${activeCurriculum.program.track}`}
             </div>
           )}
         </div>
@@ -119,6 +135,47 @@ export default function RoadmapPage() {
           </span>
         </div>
       </div>
+
+      {/* Curriculum Switcher (if user has custom assigned curriculums) */}
+      {roadmapList.length > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            marginBottom: '1.25rem',
+            padding: '10px 14px',
+            backgroundColor: '#f8f9fa',
+            borderRadius: 8,
+            border: '1px solid #e2e8f0',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: '13px', fontWeight: 600, color: '#4a5568' }}>
+            📚 Select Curriculum ({roadmapList.length}/3 max):
+          </span>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {roadmapList.map((c) => {
+              const isSelected = String(selectedCurriculumId) === String(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={isSelected ? 'btn btn-primary btn-mini' : 'btn btn-mini'}
+                  onClick={() => setSelectedCurriculumId(c.id)}
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: '12.5px',
+                    fontWeight: isSelected ? 600 : 400,
+                  }}
+                >
+                  {c.is_default ? `🏛️ ${c.title}` : `📋 ${c.title}`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Прогресс-бар степени */}
       <section className="card" style={{ padding: '16px', marginBottom: '1.5rem' }}>

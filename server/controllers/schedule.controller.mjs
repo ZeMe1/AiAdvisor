@@ -10,40 +10,26 @@ export class ScheduleController {
   }
 
   async getCurriculum(req, res) {
-    const sduCurriculum = await scheduleService.getCurriculum(req.client);
-    if (req.user?.username) {
-      const studentCompleted = sduCurriculum?.semesters?.flatMap((s) => s.courses) || [];
-      const assignedCurriculum = await curriculumService.getCurriculumForStudent(
-        req.user.username,
-        studentCompleted,
-        sduCurriculum
-      );
-      if (assignedCurriculum) {
-        return res.json(assignedCurriculum);
-      }
-    }
-    res.json(sduCurriculum);
+    const data = await scheduleService.getCurriculum(req.client);
+    res.json(data);
   }
 
   async getRoadmap(req, res) {
-    return this.getCurriculum(req, res);
+    const sduCurriculum = await scheduleService.getCurriculum(req.client);
+    const username = req.session?.username || req.client?.localUsername;
+    const studentCompleted = sduCurriculum?.semesters?.flatMap((s) => s.courses) || [];
+
+    const roadmapData = await curriculumService.getRoadmapCurriculumsForStudent(
+      username,
+      studentCompleted,
+      sduCurriculum
+    );
+    res.json(roadmapData);
   }
 
   async getEligibility(req, res) {
     const sduCurriculum = await scheduleService.getCurriculum(req.client);
-    let activeCurriculum = sduCurriculum;
-    if (req.user?.username) {
-      const studentCompleted = sduCurriculum?.semesters?.flatMap((s) => s.courses) || [];
-      const assignedCurriculum = await curriculumService.getCurriculumForStudent(
-        req.user.username,
-        studentCompleted,
-        sduCurriculum
-      );
-      if (assignedCurriculum) {
-        activeCurriculum = assignedCurriculum;
-      }
-    }
-    const result = await prerequisiteService.evaluateCurriculum(activeCurriculum);
+    const result = await prerequisiteService.evaluateCurriculum(sduCurriculum);
     res.json(result);
   }
 
