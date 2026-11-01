@@ -106,6 +106,66 @@ export async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON group_members(group_id);
     CREATE INDEX IF NOT EXISTS idx_group_members_username ON group_members(username);
+
+    CREATE TABLE IF NOT EXISTS course_catalog (
+      code VARCHAR(50) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      ects INT NOT NULL DEFAULT 5,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS program_curriculums (
+      id SERIAL PRIMARY KEY,
+      program VARCHAR(255) NOT NULL,
+      academic_year INT NOT NULL,
+      version_title VARCHAR(255) NOT NULL,
+      is_published BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_curriculums_lookup ON program_curriculums(program, academic_year, is_published);
+
+    CREATE TABLE IF NOT EXISTS program_curriculum_courses (
+      id SERIAL PRIMARY KEY,
+      curriculum_id INT NOT NULL REFERENCES program_curriculums(id) ON DELETE CASCADE,
+      semester INT NOT NULL,
+      course_code VARCHAR(50) NOT NULL,
+      course_name VARCHAR(255) NOT NULL,
+      ects INT NOT NULL DEFAULT 5,
+      course_type VARCHAR(50) NOT NULL DEFAULT 'Mandatory'
+    );
+    CREATE INDEX IF NOT EXISTS idx_curr_courses_curriculum ON program_curriculum_courses(curriculum_id);
+
+    -- Seed standard course catalog if empty
+    INSERT INTO course_catalog (code, name, ects)
+    VALUES
+      ('CSS 105', 'Fundamentals of Programming', 5),
+      ('CSS 108', 'Programming Technologies', 5),
+      ('CSS 215', 'Data Structures & Algorithms', 5),
+      ('CSS 216', 'Mobile Application Development', 5),
+      ('CSS 280', 'Web Development Basics', 5),
+      ('CSS 305', 'Database Systems', 5),
+      ('CSS 311', 'Operating Systems', 5),
+      ('CSS 320', 'Software Engineering', 5),
+      ('CSS 405', 'Artificial Intelligence', 5),
+      ('INF 318', 'Computer Networks', 5),
+      ('INF 376', 'Information Security', 5),
+      ('INF 451', 'Cloud Computing & DevOps', 5),
+      ('MAT 137', 'Mathematics 1', 5),
+      ('MAT 138', 'Mathematics 2', 5),
+      ('MDE 162', 'Academic English 1', 3),
+      ('MDE 171', 'Academic English 2', 3),
+      ('MDE 291', 'Philosophy', 3),
+      ('MDE 292', 'Sociology & Social Science', 3),
+      ('MDE 293', 'Kazakh Language 1', 3),
+      ('MDE 294', 'Kazakh Language 2', 3),
+      ('CS 101', 'Introduction to Computer Science', 5),
+      ('CS 201', 'Intermediate Programming', 5),
+      ('CS 301', 'Algorithms and Complexity', 5),
+      ('CS 401', 'Advanced Distributed Systems', 5),
+      ('MATH 101', 'Calculus I', 5),
+      ('MATH 201', 'Linear Algebra', 5),
+      ('HIST 101', 'History of Kazakhstan', 5)
+    ON CONFLICT (code) DO NOTHING;
   `);
   console.log('Database initialized with sessions & caching tables.');
 }

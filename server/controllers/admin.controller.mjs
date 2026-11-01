@@ -1,5 +1,6 @@
 import { userService } from '../services/user.service.mjs';
 import { groupService } from '../services/group.service.mjs';
+import { curriculumService } from '../services/curriculum.service.mjs';
 
 export class AdminController {
   async listUsers(req, res) {
@@ -57,6 +58,41 @@ export class AdminController {
     const { username } = req.params;
     const members = await groupService.removeStudent(groupId, username);
     res.json(members);
+  }
+
+  // --- Curriculum Management (US14) ---
+  async listCurriculums(req, res) {
+    const list = await curriculumService.listCurriculums();
+    res.json(list);
+  }
+
+  async previewCurriculum(req, res) {
+    const preview = await curriculumService.previewCurriculum(req.body);
+    res.json(preview);
+  }
+
+  async importCurriculum(req, res) {
+    const result = await curriculumService.importCurriculum(req.body);
+    res.status(201).json(result);
+  }
+
+  async getCurriculum(req, res) {
+    const id = parseInt(req.params.id, 10);
+    const curr = await curriculumService.getCurriculumDetails(id);
+    res.json(curr);
+  }
+
+  async setCurriculumPublished(req, res) {
+    const id = parseInt(req.params.id, 10);
+    const { is_published } = req.body;
+    const updated = await curriculumService.setPublished(id, Boolean(is_published));
+    res.json(updated);
+  }
+
+  async deleteCurriculum(req, res) {
+    const id = parseInt(req.params.id, 10);
+    const result = await curriculumService.deleteCurriculum(id);
+    res.json(result);
   }
 }
 

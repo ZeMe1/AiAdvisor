@@ -1,5 +1,6 @@
 import { scheduleService } from '../services/schedule.service.mjs';
 import { prerequisiteService } from '../services/prerequisite.service.mjs';
+import { curriculumService } from '../services/curriculum.service.mjs';
 
 export class ScheduleController {
   async getMe(req, res) {
@@ -11,6 +12,18 @@ export class ScheduleController {
   async getCurriculum(req, res) {
     const data = await scheduleService.getCurriculum(req.client);
     res.json(data);
+  }
+
+  async getRoadmap(req, res) {
+    const sduCurriculum = await scheduleService.getCurriculum(req.client);
+    if (req.user?.username) {
+      const studentCompleted = sduCurriculum?.semesters?.flatMap((s) => s.courses) || [];
+      const adminCurriculum = await curriculumService.getCurriculumForStudent(req.user.username, studentCompleted);
+      if (adminCurriculum) {
+        return res.json(adminCurriculum);
+      }
+    }
+    res.json(sduCurriculum);
   }
 
   async getEligibility(req, res) {

@@ -27,6 +27,7 @@ export const api = {
   logout: () => j('/api/auth/logout', { method: 'POST' }),
   me: (refresh = false) => j(`/api/me${refresh ? '?refresh=1' : ''}`),
   curriculum: () => j('/api/curriculum'),
+  roadmap: () => j('/api/roadmap'),
   eligibility: () => j('/api/eligibility'),
   sections: (code, mufSqId) =>
     j(`/api/sections?code=${encodeURIComponent(code)}${mufSqId ? `&mufSqId=${encodeURIComponent(mufSqId)}` : ''}`),
@@ -44,4 +45,10 @@ export const api = {
   adminGetGroupMembers: (id) => j(`/api/admin/groups/${id}/members`),
   adminEnrollStudent: (id, username) => j(`/api/admin/groups/${id}/members`, post({ username })),
   adminRemoveStudent: (id, username) => j(`/api/admin/groups/${id}/members/${encodeURIComponent(username)}`, { method: 'DELETE' }),
+  adminGetCurriculums: () => j('/api/admin/curriculums'),
+  adminPreviewCurriculum: (body) => j('/api/admin/curriculums/preview', post(body)),
+  adminImportCurriculum: (body) => j('/api/admin/curriculums', post(body)),
+  adminGetCurriculumDetails: (id) => j(`/api/admin/curriculums/${id}`),
+  adminSetCurriculumPublished: (id, is_published) => j(`/api/admin/curriculums/${id}/publish`, { method: 'PATCH', body: JSON.stringify({ is_published }) }),
+  adminDeleteCurriculum: (id) => j(`/api/admin/curriculums/${id}`, { method: 'DELETE' }),
 };

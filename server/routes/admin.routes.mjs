@@ -25,4 +25,12 @@ router.get('/groups/:id/members', asyncHandler((req, res) => adminController.lis
 router.post('/groups/:id/members', validateBody(enrollStudentSchema), asyncHandler((req, res) => adminController.enrollStudent(req, res)));
 router.delete('/groups/:id/members/:username', asyncHandler((req, res) => adminController.removeStudent(req, res)));
 
+// Curriculum Management (US14)
+router.get('/curriculums', asyncHandler((req, res) => adminController.listCurriculums(req, res)));
+router.post('/curriculums/preview', asyncHandler((req, res) => adminController.previewCurriculum(req, res)));
+router.post('/curriculums', asyncHandler((req, res) => adminController.importCurriculum(req, res)));
+router.get('/curriculums/:id', asyncHandler((req, res) => adminController.getCurriculum(req, res)));
+router.patch('/curriculums/:id/publish', asyncHandler((req, res) => adminController.setCurriculumPublished(req, res)));
+router.delete('/curriculums/:id', asyncHandler((req, res) => adminController.deleteCurriculum(req, res)));
+
 export default router;

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore.js';
 import { useScheduleStore } from '../stores/scheduleStore.js';
+import { api } from '../api.js';
 import EligibilityBadge from '../shared/ui/EligibilityBadge.jsx';
 
 export default function RoadmapPage() {
@@ -9,7 +10,22 @@ export default function RoadmapPage() {
   const { me } = useAuthStore();
   const { curriculum, loadCurriculum, eligibilityMap, loadEligibility } = useScheduleStore();
 
+  const [roadmapCurriculum, setRoadmapCurriculum] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    api.roadmap()
+      .then((res) => {
+        if (mounted && res?.semesters?.length) {
+          setRoadmapCurriculum(res);
+        }
+      })
+      .catch((err) => {
+        console.warn('[Roadmap] Fallback to default curriculum:', err.message);
+      });
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     if (!curriculum) {
@@ -20,7 +36,8 @@ export default function RoadmapPage() {
     }
   }, [curriculum, loadCurriculum, eligibilityMap, loadEligibility]);
 
-  const semesters = curriculum?.semesters ?? [];
+  const activeCurriculum = roadmapCurriculum || curriculum;
+  const semesters = activeCurriculum?.semesters ?? [];
 
   // Вычисляем ECTS прогресс
   const { completedEcts, inProgressEcts, totalEcts, currentSemesterNo } = useMemo(() => {
