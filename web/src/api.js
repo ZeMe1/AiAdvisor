@@ -41,6 +41,4 @@ export const api = {
   adminGetGroups: () => j('/api/admin/groups'),
   adminCreateGroup: (body) => j('/api/admin/groups', post(body)),
   adminAssignAdvisor: (id, advisor_username) => j(`/api/admin/groups/${id}/advisor`, { method: 'PUT', body: JSON.stringify({ advisor_username }) }),
-  adminImportPreview: (csvContent) => j('/api/admin/groups/import/preview', post({ csvContent })),
-  adminImportGroups: (rows) => j('/api/admin/groups/import', post({ rows })),
 };

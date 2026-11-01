@@ -38,18 +38,6 @@ export class AdminController {
     const updated = await groupService.assignAdvisor(groupId, advisor_username);
     res.json(updated);
   }
-
-  async previewImport(req, res) {
-    const { csvContent } = req.body;
-    const preview = groupService.parseCsv(csvContent);
-    res.json(preview);
-  }
-
-  async executeImport(req, res) {
-    const { rows } = req.body;
-    const result = await groupService.executeImport(rows);
-    res.json(result);
-  }
 }
 
 export const adminController = new AdminController();

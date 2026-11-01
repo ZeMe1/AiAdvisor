@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuthStore } from '../stores/authStore.js';
@@ -29,14 +29,6 @@ export default function AdminPage() {
   const [newGroupYear, setNewGroupYear] = useState(1);
   const [newGroupAdvisor, setNewGroupAdvisor] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
-
-  // CSV Import Modal state
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [importStep, setImportStep] = useState('input'); // 'input' | 'preview'
-  const [csvContent, setCsvContent] = useState('');
-  const [importPreview, setImportPreview] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const fileInputRef = useRef(null);
 
   // Confirmation Modal state
   const [modalConfig, setModalConfig] = useState({
@@ -126,7 +118,6 @@ export default function AdminPage() {
 
   // --- Group & Advisor actions (US13) ---
   const advisorCandidates = useMemo(() => {
-    // Users with Advisor or Administrator role, or other active staff
     return users.filter((u) => !u.is_blocked && (u.role === 'Advisor' || u.role === 'Administrator'));
   }, [users]);
 
@@ -178,55 +169,6 @@ export default function AdminPage() {
       toast.error('Failed to create group: ' + e.message);
     } finally {
       setCreatingGroup(false);
-    }
-  }
-
-  // CSV Import handlers
-  function handleCsvFileSelect(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setCsvContent(event.target.result || '');
-    };
-    reader.readAsText(file);
-  }
-
-  async function handlePreviewImport() {
-    if (!csvContent.trim()) {
-      toast.warn('Please paste or upload CSV content');
-      return;
-    }
-    setImporting(true);
-    try {
-      const preview = await api.adminImportPreview(csvContent);
-      setImportPreview(preview);
-      setImportStep('preview');
-    } catch (e) {
-      toast.error('CSV Preview failed: ' + e.message);
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  async function handleConfirmImport() {
-    if (!importPreview || !importPreview.rows || importPreview.rows.length === 0) {
-      toast.warn('No rows to import');
-      return;
-    }
-    setImporting(true);
-    try {
-      const res = await api.adminImportGroups(importPreview.rows);
-      toast.success(`Successfully imported ${res.groupsCount} groups and enrolled ${res.studentsEnrolled} students!`);
-      setShowImportModal(false);
-      setImportStep('input');
-      setCsvContent('');
-      setImportPreview(null);
-      loadGroups();
-    } catch (e) {
-      toast.error('Import failed: ' + e.message);
-    } finally {
-      setImporting(false);
     }
   }
 
@@ -377,22 +319,12 @@ export default function AdminPage() {
                 style={{ width: '100%', maxWidth: 360 }}
               />
 
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div>
                 <button
                   className="btn btn-primary"
                   onClick={() => setShowCreateModal(true)}
                 >
                   + Create Group
-                </button>
-                <button
-                  className="btn"
-                  onClick={() => {
-                    setImportStep('input');
-                    setImportPreview(null);
-                    setShowImportModal(true);
-                  }}
-                >
-                  📥 Import from CSV
                 </button>
               </div>
             </div>
@@ -559,132 +491,6 @@ export default function AdminPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: CSV IMPORT WITH PREVIEW ================= */}
-      {showImportModal && (
-        <div className="modal-backdrop">
-          <div className="card modal-card" style={{ maxWidth: 640, width: '100%' }}>
-            <h3 style={{ marginTop: 0 }}>Import Groups & Students from CSV</h3>
-
-            {importStep === 'input' && (
-              <div>
-                <p className="muted small" style={{ margin: '0 0 1rem 0' }}>
-                  Upload a <code>.csv</code> file or paste rows below. Expected format:
-                  <br />
-                  <code>group_name,program,study_year,student_username</code>
-                </p>
-
-                <div style={{ marginBottom: '1rem' }}>
-                  <input
-                    type="file"
-                    accept=".csv,text/plain"
-                    ref={fileInputRef}
-                    onChange={handleCsvFileSelect}
-                    style={{ marginBottom: '0.5rem' }}
-                  />
-                  <textarea
-                    rows={7}
-                    value={csvContent}
-                    onChange={(e) => setCsvContent(e.target.value)}
-                    placeholder={`group_name,program,study_year,student_username\nCS-23-1,Computer Science,2,210107001\nCS-23-1,Computer Science,2,210107002\nIS-22-2,Information Systems,3,200103045`}
-                    style={{ width: '100%', fontFamily: 'monospace', fontSize: '12px' }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                  <button
-                    className="btn"
-                    onClick={() => setShowImportModal(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="btn btn-primary"
-                    disabled={!csvContent.trim() || importing}
-                    onClick={handlePreviewImport}
-                  >
-                    {importing ? 'Analyzing CSV...' : 'Preview Import →'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {importStep === 'preview' && importPreview && (
-              <div>
-                <div
-                  style={{
-                    backgroundColor: '#e6f4ea',
-                    border: '1px solid #b7e1cd',
-                    padding: '0.75rem 1rem',
-                    borderRadius: '6px',
-                    marginBottom: '1rem',
-                  }}
-                >
-                  <b style={{ color: '#137333' }}>
-                    CSV Preview Validated:
-                  </b>{' '}
-                  Found <b>{importPreview.groupsCount} distinct groups</b> and{' '}
-                  <b>{importPreview.studentsCount} student enrollments</b> ({importPreview.totalRows} total records).
-                </div>
-
-                <div style={{ maxHeight: 220, overflowY: 'auto', marginBottom: '1rem', border: '1px solid #eee' }}>
-                  <table className="tbl" style={{ margin: 0, fontSize: '12px' }}>
-                    <thead>
-                      <tr>
-                        <th>Group</th>
-                        <th>Program</th>
-                        <th>Year</th>
-                        <th>Student Username</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {importPreview.sampleRows.map((r, idx) => (
-                        <tr key={idx}>
-                          <td><b>{r.group_name}</b></td>
-                          <td>{r.program}</td>
-                          <td>{r.study_year}</td>
-                          <td><span className="code">{r.student_username}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {importPreview.totalRows > importPreview.sampleRows.length && (
-                    <p className="muted small" style={{ textAlign: 'center', margin: '0.5rem' }}>
-                      ... and {importPreview.totalRows - importPreview.sampleRows.length} more rows
-                    </p>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <button
-                    className="btn"
-                    onClick={() => setImportStep('input')}
-                    disabled={importing}
-                  >
-                    ← Back to Edit
-                  </button>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button
-                      className="btn"
-                      onClick={() => setShowImportModal(false)}
-                      disabled={importing}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      onClick={handleConfirmImport}
-                      disabled={importing}
-                    >
-                      {importing ? 'Importing...' : 'Confirm & Import Students'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
