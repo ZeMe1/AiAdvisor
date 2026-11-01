@@ -87,6 +87,24 @@ export async function initDb() {
       UNIQUE(course_code, prereq_course_code)
     );
     CREATE INDEX IF NOT EXISTS idx_prereq_course ON prerequisites(course_code);
+
+    CREATE TABLE IF NOT EXISTS student_groups (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) UNIQUE NOT NULL,
+      program VARCHAR(255) NOT NULL,
+      study_year INTEGER NOT NULL DEFAULT 1,
+      advisor_username VARCHAR(255) REFERENCES users(username) ON DELETE SET NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS group_members (
+      id SERIAL PRIMARY KEY,
+      group_id INTEGER REFERENCES student_groups(id) ON DELETE CASCADE,
+      username VARCHAR(255) UNIQUE NOT NULL,
+      enrolled_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON group_members(group_id);
+    CREATE INDEX IF NOT EXISTS idx_group_members_username ON group_members(username);
   `);
   console.log('Database initialized with sessions & caching tables.');
 }

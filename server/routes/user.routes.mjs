@@ -11,5 +11,6 @@ router.use(requireAuth);
 
 router.get('/profile', asyncHandler((req, res) => userController.getProfile(req, res)));
 router.put('/profile', validateBody(updateProfileSchema), asyncHandler((req, res) => userController.updateProfile(req, res)));
+router.get('/advisor', asyncHandler((req, res) => userController.getMyAdvisor(req, res)));
 
 export default router;

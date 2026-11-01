@@ -34,7 +34,13 @@ export const api = {
   electives: (payload) => j('/api/electives', post(payload)),
   profile: () => j('/api/profile'),
   updateProfile: (body) => j('/api/profile', { method: 'PUT', body: JSON.stringify(body) }),
+  getMyAdvisor: () => j('/api/advisor'),
   adminGetUsers: () => j('/api/admin/users'),
   adminUpdateRole: (username, role) => j(`/api/admin/users/${encodeURIComponent(username)}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
   adminBlockUser: (username, is_blocked) => j(`/api/admin/users/${encodeURIComponent(username)}/block`, { method: 'PUT', body: JSON.stringify({ is_blocked }) }),
+  adminGetGroups: () => j('/api/admin/groups'),
+  adminCreateGroup: (body) => j('/api/admin/groups', post(body)),
+  adminAssignAdvisor: (id, advisor_username) => j(`/api/admin/groups/${id}/advisor`, { method: 'PUT', body: JSON.stringify({ advisor_username }) }),
+  adminImportPreview: (csvContent) => j('/api/admin/groups/import/preview', post({ csvContent })),
+  adminImportGroups: (rows) => j('/api/admin/groups/import', post({ rows })),
 };

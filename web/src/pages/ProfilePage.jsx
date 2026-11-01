@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore.js';
 import { useToast } from '../shared/ui/Toast.jsx';
+import MyAdvisorCard from '../components/MyAdvisorCard.jsx';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -153,6 +154,8 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+
+        <MyAdvisorCard />
       </div>
     </main>
   );
