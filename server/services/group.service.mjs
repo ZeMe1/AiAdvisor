@@ -95,6 +95,13 @@ export class GroupService {
     await groupRepository.removeStudent(groupId, String(username).trim());
     return groupRepository.listGroupMembers(groupId);
   }
+
+  async deleteGroup(groupId) {
+    const group = await groupRepository.findGroupById(groupId);
+    if (!group) throw HttpError.notFound('Group not found');
+
+    return groupRepository.deleteGroup(groupId);
+  }
 }
 
 export const groupService = new GroupService();

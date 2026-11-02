@@ -41,6 +41,7 @@ export const api = {
   adminBlockUser: (username, is_blocked) => j(`/api/admin/users/${encodeURIComponent(username)}/block`, { method: 'PUT', body: JSON.stringify({ is_blocked }) }),
   adminGetGroups: () => j('/api/admin/groups'),
   adminCreateGroup: (body) => j('/api/admin/groups', post(body)),
+  adminDeleteGroup: (id) => j(`/api/admin/groups/${id}`, { method: 'DELETE' }),
   adminAssignAdvisor: (id, advisor_username) => j(`/api/admin/groups/${id}/advisor`, { method: 'PUT', body: JSON.stringify({ advisor_username }) }),
   adminGetGroupMembers: (id) => j(`/api/admin/groups/${id}/members`),
   adminEnrollStudent: (id, username) => j(`/api/admin/groups/${id}/members`, post({ username })),

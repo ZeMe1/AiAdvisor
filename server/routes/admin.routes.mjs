@@ -18,6 +18,7 @@ router.put('/users/:username/block', validateBody(blockUserSchema), asyncHandler
 // Group & Advisor Management (US13)
 router.get('/groups', asyncHandler((req, res) => adminController.listGroups(req, res)));
 router.post('/groups', validateBody(createGroupSchema), asyncHandler((req, res) => adminController.createGroup(req, res)));
+router.delete('/groups/:id', asyncHandler((req, res) => adminController.deleteGroup(req, res)));
 router.put('/groups/:id/advisor', validateBody(assignAdvisorSchema), asyncHandler((req, res) => adminController.assignAdvisor(req, res)));
 
 // Group Students Enrollment (US13)

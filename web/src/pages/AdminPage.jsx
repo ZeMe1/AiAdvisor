@@ -305,6 +305,26 @@ export default function AdminPage() {
     });
   }
 
+  function handleDeleteGroupPrompt(group) {
+    setModalConfig({
+      isOpen: true,
+      title: 'Delete Group',
+      message: `Are you sure you want to delete group "${group.name}"? Enrolled students will be removed from this group. This cannot be undone.`,
+      confirmText: 'Delete Group',
+      isDanger: true,
+      onConfirm: async () => {
+        setModalConfig((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await api.adminDeleteGroup(group.id);
+          toast.success(`Group "${group.name}" deleted`);
+          setGroups((prev) => prev.filter((g) => g.id !== group.id));
+        } catch (e) {
+          toast.error('Failed to delete group: ' + e.message);
+        }
+      },
+    });
+  }
+
   // --- US14 Curriculums Handlers ---
   async function loadCurriculums() {
     try {
@@ -723,12 +743,13 @@ export default function AdminPage() {
                       <th>Study Year</th>
                       <th>Enrolled Students</th>
                       <th>Assigned Academic Advisor</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredGroups.length === 0 && (
                       <tr>
-                        <td colSpan="5" className="c muted">No student groups found</td>
+                        <td colSpan="6" className="c muted">No student groups found</td>
                       </tr>
                     )}
                     {filteredGroups.map((g) => (
@@ -784,6 +805,15 @@ export default function AdminPage() {
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-danger btn-mini"
+                            onClick={() => handleDeleteGroupPrompt(g)}
+                            style={{ padding: '3px 8px', fontSize: '12px' }}
+                          >
+                            Delete
+                          </button>
                         </td>
                       </tr>
                     ))}

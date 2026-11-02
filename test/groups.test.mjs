@@ -6,9 +6,9 @@ import { initDb, pool } from '../server/db.mjs';
 
 describe('US13: Manage Groups and Assign Advisors', () => {
   const cleanup = async () => {
-    await pool.query("DELETE FROM group_members WHERE username LIKE 'test_%'");
+    await pool.query("DELETE FROM group_members WHERE username LIKE 'test_student_%' OR username LIKE 'test_advisor_%'");
     await pool.query("DELETE FROM student_groups WHERE name LIKE 'TEST-%'");
-    await pool.query("DELETE FROM users WHERE username LIKE 'test_%'");
+    await pool.query("DELETE FROM users WHERE username LIKE 'test_student_%' OR username LIKE 'test_advisor_%'");
   };
 
   beforeAll(async () => {
@@ -131,5 +131,25 @@ describe('US13: Manage Groups and Assign Advisors', () => {
     await expect(
       groupService.assignAdvisor(group.id, 'test_ghost_advisor_nonexistent')
     ).rejects.toThrow(/not found in the system/);
+  });
+
+  it('deletes a group and cascades deletion of enrolled group members', async () => {
+    const group = await groupService.createGroup({
+      name: 'TEST-DELETE-GRP',
+      program: 'Data Science',
+      study_year: 4,
+    });
+    await userRepository.findOrCreateUser('test_student_del');
+    await groupService.enrollStudent(group.id, 'test_student_del');
+
+    const deleted = await groupService.deleteGroup(group.id);
+    expect(deleted.id).toBe(group.id);
+
+    const check = await groupRepository.findGroupById(group.id);
+    expect(check).toBeNull();
+
+    // Verify student no longer has this group
+    const studentAdvisor = await groupService.getStudentAdvisor('test_student_del');
+    expect(studentAdvisor.group).toBeNull();
   });
 });

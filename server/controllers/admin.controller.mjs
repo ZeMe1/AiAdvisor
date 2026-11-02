@@ -60,6 +60,12 @@ export class AdminController {
     res.json(members);
   }
 
+  async deleteGroup(req, res) {
+    const groupId = parseInt(req.params.id, 10);
+    const deleted = await groupService.deleteGroup(groupId);
+    res.json({ success: true, group: deleted });
+  }
+
   // --- Curriculum Management (US14) ---
   async listCurriculums(req, res) {
     const list = await curriculumService.listCurriculums();
