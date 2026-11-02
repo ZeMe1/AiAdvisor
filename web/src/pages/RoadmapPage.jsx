@@ -51,12 +51,12 @@ export default function RoadmapPage() {
 
   const semesters = activeCurriculum?.semesters ?? [];
 
-  // Вычисляем ECTS прогресс
+  // Вычисляем ECTS прогресс и текущий семестр
   const { completedEcts, inProgressEcts, totalEcts, currentSemesterNo } = useMemo(() => {
     let completed = 0;
     let inProgress = 0;
     let total = 0;
-    let currentSem = 1;
+    const inProgressCountBySem = {};
 
     for (const sem of semesters) {
       for (const c of sem.courses) {
@@ -66,13 +66,45 @@ export default function RoadmapPage() {
           completed += ectsNum;
         } else if (c.status === 'taken' || c.grade === 'IP') {
           inProgress += ectsNum;
-          if (sem.no > currentSem) currentSem = sem.no;
+          inProgressCountBySem[sem.no] = (inProgressCountBySem[sem.no] || 0) + 1;
         }
       }
     }
 
-    // Если нет курсов taken, берем первый семестр, где есть не сданные предметы
-    if (inProgress === 0) {
+    // 1. Официальный расчет семестра по текущему семестру (например, "2026 - 2027 Fall") и году программы
+    const termMatch = (me?.term || '').match(/(\d{4})\s*-\s*(\d{4})\s+(Fall|Spring|Summer)/i);
+    const progYear = Number(activeCurriculum?.program?.year);
+    let officialSem = null;
+    if (termMatch && progYear && progYear > 2000) {
+      const termYear = parseInt(termMatch[1], 10);
+      const isSpring = /spring/i.test(termMatch[3]);
+      const diff = termYear - progYear;
+      if (diff >= 0 && diff <= 6) {
+        officialSem = diff * 2 + (isSpring ? 2 : 1);
+      }
+    }
+
+    // 2. Семестр с наибольшим количеством активных предметов
+    let maxInProgressCount = 0;
+    let mostInProgressSem = null;
+    for (const [sNoStr, count] of Object.entries(inProgressCountBySem)) {
+      const sNo = Number(sNoStr);
+      if (count > maxInProgressCount) {
+        maxInProgressCount = count;
+        mostInProgressSem = sNo;
+      }
+    }
+
+    let currentSem = 1;
+    if (mostInProgressSem && maxInProgressCount > 0) {
+      if (officialSem && inProgressCountBySem[officialSem] === maxInProgressCount) {
+        currentSem = officialSem;
+      } else {
+        currentSem = mostInProgressSem;
+      }
+    } else if (officialSem && semesters.some((s) => s.no === officialSem)) {
+      currentSem = officialSem;
+    } else {
       const firstIncomplete = semesters.find((s) => s.courses.some((c) => c.status !== 'passed'));
       if (firstIncomplete) currentSem = firstIncomplete.no;
     }
@@ -83,7 +115,7 @@ export default function RoadmapPage() {
       totalEcts: total || 240,
       currentSemesterNo: currentSem,
     };
-  }, [semesters]);
+  }, [semesters, activeCurriculum?.program?.year, me?.term]);
 
   const progressPercent = Math.min(Math.round((completedEcts / totalEcts) * 100), 100);
 
