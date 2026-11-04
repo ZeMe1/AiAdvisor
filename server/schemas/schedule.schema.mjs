@@ -19,3 +19,8 @@ export const electivesBodySchema = z.object({
   lgCode: z.string().optional().default(''),
   type: z.string().optional().default('NAE'),
 });
+
+export const simulationBodySchema = z.object({
+  targetEctsPerSemester: z.number().int().min(5).max(60).optional().default(21),
+  numSemesters: z.number().int().min(1).max(8).optional().default(2),
+});

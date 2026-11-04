@@ -257,6 +257,16 @@ export default function RecommendationsPage() {
                 </div>
               </div>
             )}
+
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontWeight: 600, fontSize: '12.5px', border: '1px solid var(--line)', padding: '8px 12px' }}
+              onClick={() => navigate('/simulation')}
+              title="Simulate different credit loads and graduation timeline"
+            >
+              🔮 Simulate 'What-If'
+            </button>
           </div>
         </div>
 

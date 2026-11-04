@@ -32,6 +32,8 @@ export const api = {
   recommendations: () => j('/api/recommendations'),
   submitRecommendationFeedback: (courseCode, isInterested, targetSemester) =>
     j('/api/recommendations/feedback', post({ courseCode, isInterested, targetSemester })),
+  simulateWhatIf: (body) => j('/api/simulation', post(body || {})),
+  getSimulation: () => j('/api/simulation'),
   sections: (code, mufSqId) =>
     j(`/api/sections?code=${encodeURIComponent(code)}${mufSqId ? `&mufSqId=${encodeURIComponent(mufSqId)}` : ''}`),
   search: (code) => j(`/api/search?code=${encodeURIComponent(code)}`),

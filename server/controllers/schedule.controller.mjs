@@ -2,6 +2,7 @@ import { scheduleService } from '../services/schedule.service.mjs';
 import { prerequisiteService } from '../services/prerequisite.service.mjs';
 import { curriculumService } from '../services/curriculum.service.mjs';
 import { recommendationService } from '../services/recommendation.service.mjs';
+import { simulationService } from '../services/simulation.service.mjs';
 
 export class ScheduleController {
   async getMe(req, res) {
@@ -68,6 +69,24 @@ export class ScheduleController {
   async getElectives(req, res) {
     const data = await scheduleService.getElectives(req.client, req.body);
     res.json(data);
+  }
+
+  async simulateWhatIf(req, res) {
+    const { targetEctsPerSemester, numSemesters } = req.body || {};
+    const result = await simulationService.simulateWhatIf(req.client, {
+      targetEctsPerSemester,
+      numSemesters,
+    });
+    res.json(result);
+  }
+
+  async getSimulation(req, res) {
+    const { targetEctsPerSemester, numSemesters } = req.query || {};
+    const result = await simulationService.simulateWhatIf(req.client, {
+      targetEctsPerSemester: targetEctsPerSemester ? Number(targetEctsPerSemester) : 21,
+      numSemesters: numSemesters ? Number(numSemesters) : 2,
+    });
+    res.json(result);
   }
 }
 

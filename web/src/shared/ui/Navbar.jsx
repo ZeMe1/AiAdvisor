@@ -42,6 +42,14 @@ export default function Navbar() {
           🗺 Roadmap
         </button>
 
+        <button
+          className="btn btn-ghost"
+          style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+          onClick={() => navigate('/simulation')}
+        >
+          🔮 What-If Simulator
+        </button>
+
         {profile?.role === 'Administrator' && (
           <button className="btn" onClick={() => navigate('/admin')}>
             Admin Panel

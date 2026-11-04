@@ -163,6 +163,14 @@ export default function RoadmapPage() {
           <span className="badge" style={{ backgroundColor: '#e8f0fe', color: '#1a73e8', border: '1px solid #d2e3fc', padding: '4px 10px', borderRadius: 12, fontSize: '12px', fontWeight: 600 }}>
             Degree Goal: {totalEcts} ECTS
           </span>
+          <button
+            type="button"
+            className="btn btn-primary btn-mini"
+            style={{ fontWeight: 600, padding: '5px 12px', fontSize: '12.5px' }}
+            onClick={() => navigate('/simulation')}
+          >
+            🔮 What-If Simulator
+          </button>
         </div>
       </div>
 

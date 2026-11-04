@@ -21,6 +21,18 @@ describe('API Integration & Validation Tests', () => {
     expect(res.body.error).toBe('not authenticated');
   });
 
+  it('GET /api/simulation returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/api/simulation');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('not authenticated');
+  });
+
+  it('POST /api/simulation returns 401 when unauthenticated', async () => {
+    const res = await request(app).post('/api/simulation').send({ targetEctsPerSemester: 12 });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('not authenticated');
+  });
+
   it('GET /api/admin/users returns 401 when unauthenticated', async () => {
     const res = await request(app).get('/api/admin/users');
     expect(res.status).toBe(401);
