@@ -12,6 +12,7 @@ import ElectivesPage from './pages/ElectivesPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
 import RoadmapPage from './pages/RoadmapPage.jsx';
+import RecommendationsPage from './pages/RecommendationsPage.jsx';
 
 export default function App() {
   const { stage, loginNotice, error, setError, checkAuth, login, submit2fa } = useAuthStore();
@@ -44,6 +45,7 @@ export default function App() {
           )}
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/recommendations" element={<RecommendationsPage />} />
             <Route path="/roadmap" element={<RoadmapPage />} />
             <Route path="/courses/:code" element={<CoursePage />} />
             <Route path="/electives/:code" element={<ElectivesPage />} />

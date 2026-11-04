@@ -1,6 +1,7 @@
 import { scheduleService } from '../services/schedule.service.mjs';
 import { prerequisiteService } from '../services/prerequisite.service.mjs';
 import { curriculumService } from '../services/curriculum.service.mjs';
+import { recommendationService } from '../services/recommendation.service.mjs';
 
 export class ScheduleController {
   async getMe(req, res) {
@@ -34,6 +35,21 @@ export class ScheduleController {
   async getEligibility(req, res) {
     const sduCurriculum = await scheduleService.getCurriculum(req.client);
     const result = await prerequisiteService.evaluateCurriculum(sduCurriculum);
+    res.json(result);
+  }
+
+  async getRecommendations(req, res) {
+    const data = await recommendationService.getRecommendations(req.client);
+    res.json(data);
+  }
+
+  async submitRecommendationFeedback(req, res) {
+    const { courseCode, isInterested, targetSemester } = req.body;
+    const result = await recommendationService.submitFeedback(req.client, {
+      courseCode,
+      isInterested,
+      targetSemester,
+    });
     res.json(result);
   }
 

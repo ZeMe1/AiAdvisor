@@ -29,6 +29,14 @@ export default function Navbar() {
         <button
           className="btn btn-ghost"
           style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+          onClick={() => navigate('/recommendations')}
+        >
+          💡 Recommendations
+        </button>
+
+        <button
+          className="btn btn-ghost"
+          style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           onClick={() => navigate('/roadmap')}
         >
           🗺 Roadmap

@@ -143,6 +143,17 @@ export async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_user_curriculums_curr_id ON user_curriculums(curriculum_id);
 
+    CREATE TABLE IF NOT EXISTS recommendation_feedback (
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(255) NOT NULL,
+      course_code VARCHAR(50) NOT NULL,
+      is_interested BOOLEAN NOT NULL,
+      target_semester INT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      UNIQUE(username, course_code)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rec_feedback_user ON recommendation_feedback(username);
+
     -- Seed standard course catalog if empty
     INSERT INTO course_catalog (code, name, ects)
     VALUES

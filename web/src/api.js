@@ -29,6 +29,9 @@ export const api = {
   curriculum: () => j('/api/curriculum'),
   roadmap: () => j('/api/roadmap'),
   eligibility: () => j('/api/eligibility'),
+  recommendations: () => j('/api/recommendations'),
+  submitRecommendationFeedback: (courseCode, isInterested, targetSemester) =>
+    j('/api/recommendations/feedback', post({ courseCode, isInterested, targetSemester })),
   sections: (code, mufSqId) =>
     j(`/api/sections?code=${encodeURIComponent(code)}${mufSqId ? `&mufSqId=${encodeURIComponent(mufSqId)}` : ''}`),
   search: (code) => j(`/api/search?code=${encodeURIComponent(code)}`),
