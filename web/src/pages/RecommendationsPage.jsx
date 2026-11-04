@@ -30,6 +30,24 @@ export default function RecommendationsPage() {
   const [search, setSearch] = useState('');
   const [feedbackLoading, setFeedbackLoading] = useState({});
 
+  // US17: Personalized Semester Study Plan State
+  const [planData, setPlanData] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planApproved, setPlanApproved] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    api.getSavedPlan()
+      .then((res) => {
+        if (mounted && res?.plan) {
+          setPlanData(res.plan);
+          setPlanApproved(true);
+        }
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [currentUsername]);
+
   useEffect(() => {
     let mounted = true;
     if (!hasCachedData) {
@@ -212,6 +230,47 @@ export default function RecommendationsPage() {
       });
   };
 
+  /**
+   * US17: Generate Personalized Semester Study Plan
+   */
+  const handleGeneratePlan = async () => {
+    setPlanLoading(true);
+    try {
+      const res = await api.generatePlan({
+        targetSemester: data?.targetSemester,
+        maxEcts: data?.maxEctsLimit || 21,
+      });
+      setPlanData(res);
+      setPlanApproved(false);
+      toast.success(`Personalized study plan generated (${res.totalEcts} ECTS)`);
+    } catch (err) {
+      toast.error('Failed to generate study plan: ' + err.message);
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  /**
+   * US17: Approve & Save Study Plan to Database
+   */
+  const handleSavePlan = async () => {
+    if (!planData || !planData.courses?.length) return;
+    setPlanLoading(true);
+    try {
+      await api.savePlan({
+        targetSemester: planData.targetSemester,
+        courses: planData.courses,
+        totalEcts: planData.totalEcts,
+      });
+      setPlanApproved(true);
+      toast.success('Study plan approved and saved! Your Roadmap is now updated with your planned courses.');
+    } catch (err) {
+      toast.error('Failed to save study plan: ' + err.message);
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
   return (
     <main className="page" style={{ maxWidth: 1280, margin: '0 auto', padding: '14px' }}>
       {/* Top Banner / Academic Snapshot */}
@@ -219,7 +278,6 @@ export default function RecommendationsPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-              <span style={{ fontSize: '20px' }}>💡</span>
               <h2 style={{ margin: 0, fontSize: '18px', color: 'var(--blue-dark)' }}>Personalized Course Recommendations</h2>
             </div>
             <p className="muted small" style={{ margin: 0 }}>
@@ -273,7 +331,7 @@ export default function RecommendationsPage() {
         {/* ECTS Overload Warning */}
         {isOverLimit && (
           <div className="banner-warn" style={{ marginTop: '10px' }}>
-            ⚠ <b>ECTS Limit Warning:</b> Your current planned registration ({plannedEcts} ECTS) exceeds the recommended limit of {maxLimit} ECTS per semester.
+            <b>ECTS Limit Warning:</b> Your current planned registration ({plannedEcts} ECTS) exceeds the recommended limit of {maxLimit} ECTS per semester.
           </div>
         )}
       </section>
@@ -294,7 +352,6 @@ export default function RecommendationsPage() {
             marginBottom: '14px',
           }}
         >
-          <div style={{ fontSize: '40px', marginBottom: '12px' }}>🚫</div>
           <h2 style={{ color: '#D9381E', margin: '0 0 8px 0', fontSize: '20px' }}>
             AI Recommendations Disabled for Your Program
           </h2>
@@ -311,12 +368,200 @@ export default function RecommendationsPage() {
         </section>
       ) : (
         <>
+          {/* US17: Personalized Semester Study Plan Section */}
+          <section className="card" style={{ marginBottom: '16px', borderLeft: '4px solid #7c3aed' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <h2 style={{ margin: 0, fontSize: '18px', color: '#4c1d95' }}>
+                    Personalized Semester Study Plan
+                  </h2>
+                  {planApproved && (
+                    <span style={{ backgroundColor: '#e6f4ea', color: '#137333', border: '1px solid #ceead6', padding: '2px 8px', borderRadius: 4, fontSize: '11px', fontWeight: 700 }}>
+                      Approved & Saved on Roadmap
+                    </span>
+                  )}
+                </div>
+                <p className="muted small" style={{ margin: '3px 0 0' }}>
+                  Automated study plan prioritizing retakes, core requirements, and eligible electives up to the university {maxLimit} ECTS policy limit.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={planLoading}
+                  onClick={handleGeneratePlan}
+                  style={{ fontWeight: 600, fontSize: '13px', padding: '6px 14px' }}
+                >
+                  {planLoading ? 'Generating…' : planData ? 'Regenerate Plan' : 'Generate Study Plan'}
+                </button>
+
+                {planData && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={planLoading}
+                    onClick={handleSavePlan}
+                    style={{ fontWeight: 600, fontSize: '13px', padding: '6px 14px', backgroundColor: '#7c3aed', borderColor: '#6d28d9' }}
+                  >
+                    {planApproved ? 'Re-Approve Plan' : 'Approve & Save Plan'}
+                  </button>
+                )}
+
+                {planApproved && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => navigate('/roadmap')}
+                    style={{ fontWeight: 600, fontSize: '13px', padding: '6px 14px', border: '1px solid #c4b5fd', color: '#6d28d9' }}
+                  >
+                    View on Roadmap →
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {!planData ? (
+              <div style={{ backgroundColor: '#faf5ff', border: '1px dashed #d8b4fe', borderRadius: 8, padding: '20px', textAlign: 'center' }}>
+                <h3 style={{ margin: '0 0 6px 0', fontSize: '15px', color: '#5b21b6' }}>
+                  Generate Your Balanced Study Plan for Next Registration
+                </h3>
+                <p className="muted small" style={{ margin: '0 0 14px 0', maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
+                  Our intelligent planner packs required retakes first, fills required mandatory courses for Semester {data?.targetSemester || 1}, and selects the best electives within your {maxLimit} ECTS ceiling.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleGeneratePlan}
+                  disabled={planLoading}
+                  style={{ backgroundColor: '#7c3aed', borderColor: '#6d28d9', padding: '8px 20px', fontWeight: 600 }}
+                >
+                  {planLoading ? 'Generating Plan…' : `Generate Plan for Semester ${data?.targetSemester || 1}`}
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Plan Summary Bar */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', padding: '10px 14px', backgroundColor: '#faf5ff', borderRadius: 6, border: '1px solid #ede9fe', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                    <div>
+                      <span className="muted small" style={{ display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700 }}>Semester</span>
+                      <b style={{ color: '#5b21b6', fontSize: '15px' }}>Semester {planData.targetSemester}</b>
+                    </div>
+                    <div>
+                      <span className="muted small" style={{ display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700 }}>Total Load</span>
+                      <b style={{ color: planData.totalEcts > maxLimit ? '#c5221f' : '#5b21b6', fontSize: '15px' }}>
+                        {planData.totalEcts} / {planData.maxEctsLimit || maxLimit} ECTS
+                      </b>
+                    </div>
+                    <div>
+                      <span className="muted small" style={{ display: 'block', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700 }}>Status</span>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: planData.totalEcts <= maxLimit ? '#00773c' : '#c5221f' }}>
+                        {planData.totalEcts <= maxLimit ? 'Within Policy Limit' : 'Exceeds ECTS Limit'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ backgroundColor: '#fff', border: '1px solid #ddd6fe', padding: '3px 8px', borderRadius: 4, fontSize: '11.5px', color: '#4c1d95', fontWeight: 600 }}>
+                      {planData.courses.length} total courses
+                    </span>
+                    {planData.courses.filter(c => c.isRetake).length > 0 && (
+                      <span style={{ backgroundColor: '#fce8e6', border: '1px solid #fad2cf', padding: '3px 8px', borderRadius: 4, fontSize: '11.5px', color: '#c5221f', fontWeight: 700 }}>
+                        {planData.courses.filter(c => c.isRetake).length} retakes
+                      </span>
+                    )}
+                    <span style={{ backgroundColor: '#fff', border: '1px solid #ddd6fe', padding: '3px 8px', borderRadius: 4, fontSize: '11.5px', color: '#4c1d95', fontWeight: 600 }}>
+                      {planData.courses.filter(c => c.isMandatory && !c.isRetake).length} mandatory
+                    </span>
+                    <span style={{ backgroundColor: '#fff', border: '1px solid #ddd6fe', padding: '3px 8px', borderRadius: 4, fontSize: '11.5px', color: '#4c1d95', fontWeight: 600 }}>
+                      {planData.courses.filter(c => !c.isMandatory).length} electives
+                    </span>
+                  </div>
+                </div>
+
+                {/* Plan Courses Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px', marginBottom: '8px' }}>
+                  {planData.courses.map((c) => {
+                    const isElective = !c.isMandatory;
+                    const cKey = (c.code && c.name ? `${c.code}:${c.name}` : c.code);
+                    return (
+                      <div
+                        key={cKey}
+                        style={{
+                          border: c.isRetake ? '1px solid #fad2cf' : '1px solid #ddd6fe',
+                          borderRadius: '6px',
+                          padding: '12px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          backgroundColor: c.isRetake ? '#fffbfb' : '#ffffff',
+                          boxShadow: '0 1px 3px rgba(124, 58, 237, 0.05)',
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px', gap: '8px' }}>
+                            <span className="code" style={{ fontSize: '15px' }}>{c.code}</span>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                              {c.isRetake ? (
+                                <span style={{ backgroundColor: '#f6c9c9', color: '#7c1a1a', border: '1px solid #d98a8a', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>
+                                  Retake (Priority 1)
+                                </span>
+                              ) : c.isMandatory ? (
+                                <span style={{ backgroundColor: '#e8edf2', color: 'var(--blue)', border: '1px solid #b9c4cf', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>
+                                  Core Mandatory
+                                </span>
+                              ) : (
+                                <span style={{ backgroundColor: '#faf5ff', color: '#6d28d9', border: '1px solid #c4b5fd', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', fontWeight: 600 }}>
+                                  Elective
+                                </span>
+                              )}
+
+                              <span style={{ backgroundColor: '#e6f4ea', color: '#00773c', border: '1px solid #ceead6', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>
+                                {c.ects} ECTS
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px', color: '#1c2733' }}>
+                            {c.name}
+                          </div>
+
+                          <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderLeft: '3px solid #7c3aed', padding: '6px 8px', borderRadius: 4, fontSize: '12px', color: '#475569', marginBottom: '8px', lineHeight: 1.4 }}>
+                            {c.reason}
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span className="small muted" style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8' }}>
+                            {c.isRetake ? 'Retake Priority' : c.isMandatory ? 'Core Requirement' : 'Elective Course'}
+                          </span>
+
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            onClick={() => handleOpenCourse(c)}
+                            style={{ fontSize: '12px', padding: '3px 8px' }}
+                          >
+                            Section Info →
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </section>
+
           {/* Recommended Set Section (Respects ECTS Limit & US19 Feedback) */}
           <section className="card" style={{ marginBottom: '14px', borderLeft: '4px solid var(--blue)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
               <div>
                 <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--blue-dark)' }}>
-                  <span>⭐</span> Recommended Study Set ({recommendedEcts} ECTS)
+                  Recommended Study Set ({recommendedEcts} ECTS)
                 </h2>
                 <p className="muted small" style={{ margin: '2px 0 0' }}>
                   Optimal set of core requirements and eligible courses within the {maxLimit} ECTS semester limit.
@@ -490,7 +735,7 @@ export default function RecommendationsPage() {
                                 fontWeight: 700,
                               }}
                             >
-                              ⚡ Retake Priority
+                              Retake Priority
                             </span>
                           )}
                         </div>
@@ -526,7 +771,7 @@ export default function RecommendationsPage() {
                               onClick={() => handleFeedback(c, true)}
                               style={{ fontWeight: 600 }}
                             >
-                              👍 Interested
+                              Interested
                             </button>
                             <button
                               type="button"
@@ -536,7 +781,7 @@ export default function RecommendationsPage() {
                               onClick={() => handleFeedback(c, false)}
                               style={{ fontWeight: 600 }}
                             >
-                              👎 Not interesting
+                              Not interesting
                             </button>
                           </div>
                         </div>
@@ -607,7 +852,7 @@ export default function RecommendationsPage() {
                 onClick={() => setFilterType('interested')}
                 style={{ fontWeight: 600 }}
               >
-                👍 Interested ({counts.interested})
+                Interested ({counts.interested})
               </button>
               {counts.retake > 0 && (
                 <button
@@ -616,7 +861,7 @@ export default function RecommendationsPage() {
                   onClick={() => setFilterType('retake')}
                   style={{ fontWeight: 600 }}
                 >
-                  ⚡ Retakes ({counts.retake})
+                  Retakes ({counts.retake})
                 </button>
               )}
               <button
@@ -729,9 +974,9 @@ export default function RecommendationsPage() {
                                 disabled={isBusy}
                                 title="Interested"
                                 onClick={() => handleFeedback(c, true)}
-                                style={{ padding: '2px 6px', fontSize: '12px' }}
+                                style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}
                               >
-                                👍
+                                Like
                               </button>
                               <button
                                 type="button"
@@ -739,9 +984,9 @@ export default function RecommendationsPage() {
                                 disabled={isBusy}
                                 title="Not interesting"
                                 onClick={() => handleFeedback(c, false)}
-                                style={{ padding: '2px 6px', fontSize: '12px' }}
+                                style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}
                               >
-                                👎
+                                Pass
                               </button>
                             </div>
                           </td>

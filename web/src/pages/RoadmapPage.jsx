@@ -123,6 +123,7 @@ export default function RoadmapPage() {
   const getCourseRoadmapStatus = (course) => {
     if (course.status === 'passed') return 'passed';
     if (course.status === 'taken' || course.grade === 'IP') return 'taken';
+    if (course.isPlanned) return 'planned';
 
     const eligibility = eligibilityMap?.[course.code?.toUpperCase().trim()];
     if (eligibility?.status === 'not_eligible') return 'locked';
@@ -190,7 +191,7 @@ export default function RoadmapPage() {
           }}
         >
           <span style={{ fontSize: '13px', fontWeight: 600, color: '#4a5568' }}>
-            📚 Select Curriculum ({roadmapList.length}/3 max):
+            Select Curriculum ({roadmapList.length}/3 max):
           </span>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             {roadmapList.map((c) => {
@@ -207,7 +208,7 @@ export default function RoadmapPage() {
                     fontWeight: isSelected ? 600 : 400,
                   }}
                 >
-                  {c.is_default ? `🏛️ ${c.title}` : `📋 ${c.title}`}
+                  {c.is_default ? `${c.title} (SDU)` : c.title}
                 </button>
               );
             })}
@@ -233,10 +234,13 @@ export default function RoadmapPage() {
             <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#fbbc04' }} /> In Progress
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#7c3aed' }} /> Planned (Semester Plan)
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
             <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#1a73e8' }} /> Eligible
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#80868b' }} /> 🔒 Locked (Prerequisites Missing)
+            <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#80868b' }} /> Locked (Prerequisites Missing)
           </span>
         </div>
       </section>
@@ -280,6 +284,7 @@ export default function RoadmapPage() {
                   const isLocked = status === 'locked';
                   const isPassed = status === 'passed';
                   const isTaken = status === 'taken';
+                  const isPlanned = status === 'planned';
 
                   // Стили карточки предмета
                   let borderColor = '#dadce0';
@@ -294,6 +299,10 @@ export default function RoadmapPage() {
                     borderColor = '#feefc3';
                     bgColor = '#fffdf6';
                     textColor = '#b06000';
+                  } else if (isPlanned) {
+                    borderColor = '#c4b5fd';
+                    bgColor = '#f5f3ff';
+                    textColor = '#6d28d9';
                   } else if (isLocked) {
                     borderColor = '#e8eaed';
                     bgColor = '#f8f9fa';
@@ -332,8 +341,13 @@ export default function RoadmapPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           {isPassed && <span style={{ fontSize: '11px', fontWeight: 700, color: '#137333' }}>{course.grade || 'Passed'}</span>}
                           {isTaken && <span style={{ fontSize: '11px', fontWeight: 700, color: '#b06000' }}>In Progress</span>}
-                          {isLocked && <span style={{ fontSize: '11px', color: '#c5221f' }}>🔒 Locked</span>}
-                          {!isPassed && !isTaken && !isLocked && <span style={{ fontSize: '11px', color: '#1a73e8' }}>● Eligible</span>}
+                          {isPlanned && (
+                            <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#6d28d9', backgroundColor: '#ede9fe', padding: '1px 6px', borderRadius: 4 }}>
+                              Planned
+                            </span>
+                          )}
+                          {isLocked && <span style={{ fontSize: '11px', color: '#c5221f' }}>Locked</span>}
+                          {!isPassed && !isTaken && !isPlanned && !isLocked && <span style={{ fontSize: '11px', color: '#1a73e8' }}>● Eligible</span>}
                         </div>
                       </div>
 
@@ -409,6 +423,29 @@ export default function RoadmapPage() {
               )}
             </div>
 
+            {/* Блок для запланированного курса в approved study plan */}
+            {selectedCourse.status === 'planned' && (
+              <div
+                style={{
+                  backgroundColor: '#f5f3ff',
+                  border: '1px solid #c4b5fd',
+                  borderLeft: '4px solid #7c3aed',
+                  padding: '12px 14px',
+                  borderRadius: '6px',
+                  marginBottom: '16px',
+                  color: '#5b21b6',
+                  fontSize: '13px',
+                }}
+              >
+                <div style={{ fontWeight: 700, marginBottom: '4px', color: '#6d28d9' }}>
+                  Planned in Approved Study Plan
+                </div>
+                <div>
+                  This course is selected and saved as part of your personalized semester study plan.
+                </div>
+              </div>
+            )}
+
             {/* Блок для заблокированного курса (US15 Scenario 2: View-only mode with missing prerequisites) */}
             {selectedCourse.status === 'locked' && (
               <div
@@ -422,7 +459,7 @@ export default function RoadmapPage() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#c5221f', fontWeight: 600, marginBottom: '6px' }}>
-                  <span>🔒 Course is Locked (Prerequisites Not Met)</span>
+                  <span>Course is Locked (Prerequisites Not Met)</span>
                 </div>
                 <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#5f6368' }}>
                   You cannot register for this course yet. The following prerequisite courses must be completed first:

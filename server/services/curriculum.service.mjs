@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { curriculumRepository } from '../repositories/curriculum.repository.mjs';
 import { groupRepository } from '../repositories/group.repository.mjs';
 import { userRepository } from '../repositories/user.repository.mjs';
+import { planRepository } from '../repositories/plan.repository.mjs';
 import { HttpError } from '../errors/http-error.mjs';
 
 export class CurriculumService {
@@ -298,8 +299,35 @@ export class CurriculumService {
   async getRoadmapCurriculumsForStudent(username, studentCompletedCourses = [], sduCurriculum = null) {
     const curriculums = [];
 
+    // Load student's approved study plan if present (US17)
+    const savedPlan = username ? await planRepository.getPlan(username).catch(() => null) : null;
+    const plannedCourseCodes = new Set((savedPlan?.courses || []).map((c) => (c.code || '').toUpperCase().trim()));
+    const plannedCourseFullKeys = new Set(
+      (savedPlan?.courses || []).map((c) => `${(c.code || '').toUpperCase().trim()}:${(c.name || '').toUpperCase().trim()}`)
+    );
+
+    const checkIsPlanned = (code, name) => {
+      const cleanCode = (code || '').toUpperCase().trim();
+      const cleanName = (name || '').toUpperCase().trim();
+      if (/^XXX/i.test(cleanCode)) {
+        return plannedCourseFullKeys.has(`${cleanCode}:${cleanName}`);
+      }
+      return plannedCourseCodes.has(cleanCode);
+    };
+
     // 1. Official SDU portal curriculum
     if (sduCurriculum && sduCurriculum.semesters) {
+      const sduSemesters = sduCurriculum.semesters.map((s) => ({
+        ...s,
+        courses: (s.courses || []).map((c) => {
+          const isPlanned = checkIsPlanned(c.code, c.name);
+          return {
+            ...c,
+            isPlanned,
+          };
+        }),
+      }));
+
       curriculums.push({
         id: 'sdu',
         title: sduCurriculum.program?.title ? `${sduCurriculum.program.title} (SDU Portal)` : 'SDU Portal Curriculum (Official)',
@@ -307,7 +335,7 @@ export class CurriculumService {
         year: sduCurriculum.program?.year || new Date().getFullYear(),
         track: sduCurriculum.program?.track || 'Official Track',
         is_default: true,
-        semesters: sduCurriculum.semesters,
+        semesters: sduSemesters,
       });
     }
 
@@ -365,6 +393,7 @@ export class CurriculumService {
             mufSqId: sduCourse?.mufSqId,
             elective: sduCourse?.elective,
             isElective: Boolean(c.course_type && c.course_type.toLowerCase().includes('elective')),
+            isPlanned: checkIsPlanned(cleanCode, c.course_name),
           });
         }
 

@@ -34,6 +34,9 @@ export const api = {
     j('/api/recommendations/feedback', post({ courseCode, isInterested, targetSemester })),
   simulateWhatIf: (body) => j('/api/simulation', post(body || {})),
   getSimulation: () => j('/api/simulation'),
+  generatePlan: (body) => j('/api/plan/generate', post(body || {})),
+  savePlan: (body) => j('/api/plan/save', post(body || {})),
+  getSavedPlan: (targetSemester) => j(`/api/plan${targetSemester ? `?targetSemester=${targetSemester}` : ''}`),
   sections: (code, mufSqId) =>
     j(`/api/sections?code=${encodeURIComponent(code)}${mufSqId ? `&mufSqId=${encodeURIComponent(mufSqId)}` : ''}`),
   search: (code) => j(`/api/search?code=${encodeURIComponent(code)}`),

@@ -169,6 +169,19 @@ export async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_rec_configs_active ON recommendation_configs(is_active);
 
+    CREATE TABLE IF NOT EXISTS student_semester_plans (
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(255) NOT NULL,
+      target_semester INT NOT NULL,
+      courses JSONB NOT NULL DEFAULT '[]'::jsonb,
+      total_ects INT NOT NULL DEFAULT 0,
+      is_approved BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      UNIQUE(username, target_semester)
+    );
+    CREATE INDEX IF NOT EXISTS idx_student_plans_user ON student_semester_plans(username);
+
     -- Seed initial recommendation configuration (min 20, max 21..40 ECTS) if empty
     INSERT INTO recommendation_configs (version, min_ects, max_ects, gpa_weight, retake_weight, interest_weight, disabled_programs, created_by, is_active)
     SELECT 1, 20, 21, 1.0, 2.0, 1.5, '[]'::jsonb, 'System', true

@@ -3,6 +3,7 @@ import { prerequisiteService } from '../services/prerequisite.service.mjs';
 import { curriculumService } from '../services/curriculum.service.mjs';
 import { recommendationService } from '../services/recommendation.service.mjs';
 import { simulationService } from '../services/simulation.service.mjs';
+import { planService } from '../services/plan.service.mjs';
 
 export class ScheduleController {
   async getMe(req, res) {
@@ -86,6 +87,31 @@ export class ScheduleController {
       targetEctsPerSemester: targetEctsPerSemester ? Number(targetEctsPerSemester) : 21,
       numSemesters: numSemesters ? Number(numSemesters) : 2,
     });
+    res.json(result);
+  }
+
+  async generatePlan(req, res) {
+    const { targetSemester, maxEcts } = req.body || {};
+    const result = await planService.generatePersonalizedPlan(req.client, {
+      targetSemester,
+      maxEcts,
+    });
+    res.json(result);
+  }
+
+  async savePlan(req, res) {
+    const { targetSemester, courses, totalEcts } = req.body || {};
+    const result = await planService.saveApprovedPlan(req.client, {
+      targetSemester,
+      courses,
+      totalEcts,
+    });
+    res.json(result);
+  }
+
+  async getSavedPlan(req, res) {
+    const { targetSemester } = req.query || {};
+    const result = await planService.getApprovedPlan(req.client, targetSemester);
     res.json(result);
   }
 }
