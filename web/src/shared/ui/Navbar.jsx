@@ -28,26 +28,23 @@ export default function Navbar() {
       <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
         <button
           className="btn btn-ghost"
-          style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           onClick={() => navigate('/recommendations')}
         >
-          💡 Recommendations
+          Recommendations
         </button>
 
         <button
           className="btn btn-ghost"
-          style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           onClick={() => navigate('/roadmap')}
         >
-          🗺 Roadmap
+          Roadmap
         </button>
 
         <button
           className="btn btn-ghost"
-          style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           onClick={() => navigate('/simulation')}
         >
-          🔮 What-If Simulator
+          What-If Simulator
         </button>
 
         {profile?.role === 'Administrator' && (

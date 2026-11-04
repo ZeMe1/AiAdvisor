@@ -51,7 +51,7 @@ export default function SimulationPage() {
       {/* Simulator Control Panel */}
       <section className="card" style={{ marginBottom: '20px' }}>
         <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', color: 'var(--blue-dark)' }}>
-          ⚙ Workload Simulation Parameters
+          Workload Simulation Parameters
         </h3>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', alignItems: 'center' }}>
@@ -137,7 +137,7 @@ export default function SimulationPage() {
         {/* Metric 1: Projected Graduation Term */}
         <div className="card" style={{ borderLeft: '4px solid var(--blue)' }}>
           <div style={{ fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>
-            🎓 Projected Graduation
+            Projected Graduation
           </div>
           <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--blue-dark)', marginBottom: '4px' }}>
             {projection?.projectedGraduationTerm || 'Calculating…'}
@@ -165,7 +165,7 @@ export default function SimulationPage() {
         {/* Metric 2: Academic Risk Level */}
         <div className="card" style={{ borderLeft: `4px solid ${risk.color || '#16a34a'}` }}>
           <div style={{ fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>
-            ⚠ Academic Overload Risk
+            Academic Overload Risk
           </div>
           <div style={{ fontSize: '20px', fontWeight: 800, color: risk.color || '#16a34a', marginBottom: '4px' }}>
             {risk.riskWarning}
@@ -178,7 +178,7 @@ export default function SimulationPage() {
         {/* Metric 3: Academic Profile & Progress */}
         <div className="card" style={{ borderLeft: '4px solid #10b981' }}>
           <div style={{ fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>
-            📊 Curriculum Progress
+            Curriculum Progress
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
             <span style={{ fontSize: '18px', fontWeight: 800, color: '#1c2733' }}>
@@ -210,7 +210,7 @@ export default function SimulationPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
           <div>
             <h3 style={{ margin: 0, color: 'var(--blue-dark)', fontSize: '17px' }}>
-              🗓 Simulated Study Progression (Next {numSemesters} Semesters)
+              Simulated Study Progression (Next {numSemesters} Semesters)
             </h3>
             <p className="muted small" style={{ margin: '2px 0 0' }}>
               Simulated course allocation honoring prerequisite chaining and university policy limits.

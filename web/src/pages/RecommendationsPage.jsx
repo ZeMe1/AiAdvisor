@@ -265,7 +265,7 @@ export default function RecommendationsPage() {
               onClick={() => navigate('/simulation')}
               title="Simulate different credit loads and graduation timeline"
             >
-              🔮 Simulate 'What-If'
+              Simulate 'What-If'
             </button>
           </div>
         </div>

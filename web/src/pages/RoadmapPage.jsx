@@ -169,7 +169,7 @@ export default function RoadmapPage() {
             style={{ fontWeight: 600, padding: '5px 12px', fontSize: '12.5px' }}
             onClick={() => navigate('/simulation')}
           >
-            🔮 What-If Simulator
+            What-If Simulator
           </button>
         </div>
       </div>
