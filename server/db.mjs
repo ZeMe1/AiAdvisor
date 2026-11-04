@@ -154,6 +154,26 @@ export async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_rec_feedback_user ON recommendation_feedback(username);
 
+    CREATE TABLE IF NOT EXISTS recommendation_configs (
+      id SERIAL PRIMARY KEY,
+      version INT NOT NULL,
+      min_ects INT NOT NULL DEFAULT 20,
+      max_ects INT NOT NULL DEFAULT 21,
+      gpa_weight NUMERIC(4,2) NOT NULL DEFAULT 1.0,
+      retake_weight NUMERIC(4,2) NOT NULL DEFAULT 2.0,
+      interest_weight NUMERIC(4,2) NOT NULL DEFAULT 1.5,
+      disabled_programs JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_by VARCHAR(255) DEFAULT 'System',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      is_active BOOLEAN NOT NULL DEFAULT TRUE
+    );
+    CREATE INDEX IF NOT EXISTS idx_rec_configs_active ON recommendation_configs(is_active);
+
+    -- Seed initial recommendation configuration (min 20, max 21..40 ECTS) if empty
+    INSERT INTO recommendation_configs (version, min_ects, max_ects, gpa_weight, retake_weight, interest_weight, disabled_programs, created_by, is_active)
+    SELECT 1, 20, 21, 1.0, 2.0, 1.5, '[]'::jsonb, 'System', true
+    WHERE NOT EXISTS (SELECT 1 FROM recommendation_configs);
+
     -- Seed standard course catalog if empty
     INSERT INTO course_catalog (code, name, ects)
     VALUES

@@ -58,4 +58,7 @@ export const api = {
   adminGetCurriculumStudents: (id) => j(`/api/admin/curriculums/${id}/students`),
   adminAssignCurriculumStudent: (id, username) => j(`/api/admin/curriculums/${id}/students`, post({ username })),
   adminRemoveCurriculumStudent: (id, username) => j(`/api/admin/curriculums/${id}/students/${encodeURIComponent(username)}`, { method: 'DELETE' }),
+  adminGetRecommendationConfig: () => j('/api/admin/recommendations/config'),
+  adminUpdateRecommendationConfig: (body) => j('/api/admin/recommendations/config', { method: 'PUT', body: JSON.stringify(body) }),
+  adminResetRecommendationConfig: () => j('/api/admin/recommendations/config/reset', { method: 'POST' }),
 };

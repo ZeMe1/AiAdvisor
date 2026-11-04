@@ -11,28 +11,28 @@ export class ScheduleService {
     const username = client?.localUsername;
     const cacheKey = (tId) => (username ? `${username}:${tId}` : String(tId));
 
-    // 1. Сначала проверяем кэш студента в БД — там уже сохранён trackId
+    // 1. Сначала проверяем кэш студента в БД — там уже сохранён trackId (постоянен для студента)
     const studentData = await cacheRepository.getStudentData(username);
     let trackId = studentData?.track?.id;
+
+    if (!trackId) {
+      const staleStudent = await cacheRepository.getStudentData(username, Infinity);
+      trackId = staleStudent?.track?.id;
+    }
 
     if (trackId) {
       const cached = await cacheRepository.getCurriculum(cacheKey(trackId));
       if (cached) return cached.curriculum;
     }
 
-    // 2. Если trackId ещё нет в БД, запрашиваем страницу регистраций
+    // 2. Только если trackId ещё нет в БД, запрашиваем страницу регистраций
     if (!trackId) {
       try {
         const me = await client.getCourseReg();
         if (me.authenticated !== false) trackId = me.track?.id;
       } catch (err) {
-        console.warn('[getCurriculum] getCourseReg failed, checking stale student cache:', err.message);
+        console.warn('[getCurriculum] getCourseReg failed:', err.message);
       }
-    }
-
-    if (!trackId) {
-      const staleStudent = await cacheRepository.getStudentData(username, Infinity);
-      trackId = staleStudent?.track?.id;
     }
 
     if (!trackId) {

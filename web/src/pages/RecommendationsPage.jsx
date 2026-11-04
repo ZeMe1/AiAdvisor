@@ -5,26 +5,41 @@ import { useAuthStore } from '../stores/authStore.js';
 import { usePlanStore } from '../stores/planStore.js';
 import { useToast } from '../shared/ui/Toast.jsx';
 
+// Client-side cache for instant zero-latency page loading (stale-while-revalidate)
+let globalRecCache = null;
+let globalRecCacheUser = null;
+
+export function clearRecommendationsCache() {
+  globalRecCache = null;
+  globalRecCacheUser = null;
+}
+
 export default function RecommendationsPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const { me, profile } = useAuthStore();
   const { plan } = usePlanStore();
 
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState(null);
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'mandatory' | 'elective'
+  const currentUsername = profile?.username || me?.user?.username || me?.username;
+  const hasCachedData = globalRecCache && globalRecCacheUser === currentUsername;
+
+  const [loading, setLoading] = useState(!hasCachedData);
+  const [data, setData] = useState(hasCachedData ? globalRecCache : null);
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'interested' | 'retake' | 'mandatory' | 'elective'
+  const [sortBy, setSortBy] = useState('score'); // 'score' | 'semester' | 'ects' | 'name'
   const [search, setSearch] = useState('');
   const [feedbackLoading, setFeedbackLoading] = useState({});
 
-  const currentUsername = profile?.username || me?.user?.username || me?.username;
-
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
+    if (!hasCachedData) {
+      setLoading(true);
+    }
     api.recommendations()
       .then((res) => {
         if (mounted) {
+          globalRecCache = res;
+          globalRecCacheUser = currentUsername;
           setData(res);
           setLoading(false);
         }
@@ -32,7 +47,9 @@ export default function RecommendationsPage() {
       .catch((err) => {
         if (mounted) {
           console.error('[RecommendationsPage] Failed to fetch:', err);
-          toast.error('Failed to load recommendations: ' + err.message);
+          if (!hasCachedData) {
+            toast.error('Failed to load recommendations: ' + err.message);
+          }
           setLoading(false);
         }
       });
@@ -54,9 +71,22 @@ export default function RecommendationsPage() {
 
   const isOverLimit = plannedEcts > maxLimit;
 
-  // Filtered all eligible courses
+  // Category counts for quick filter buttons
+  const counts = useMemo(() => {
+    return {
+      all: allRecommendations.length,
+      interested: allRecommendations.filter((c) => c.feedback === true).length,
+      retake: allRecommendations.filter((c) => c.isRetake).length,
+      mandatory: allRecommendations.filter((c) => c.isMandatory).length,
+      elective: allRecommendations.filter((c) => !c.isMandatory).length,
+    };
+  }, [allRecommendations]);
+
+  // Filtered and sorted eligible courses list
   const filteredCourses = useMemo(() => {
-    return allRecommendations.filter((c) => {
+    let list = allRecommendations.filter((c) => {
+      if (filterType === 'interested' && c.feedback !== true) return false;
+      if (filterType === 'retake' && !c.isRetake) return false;
       if (filterType === 'mandatory' && !c.isMandatory) return false;
       if (filterType === 'elective' && c.isMandatory) return false;
       if (search.trim()) {
@@ -69,7 +99,15 @@ export default function RecommendationsPage() {
       }
       return true;
     });
-  }, [allRecommendations, filterType, search]);
+
+    return list.slice().sort((a, b) => {
+      if (sortBy === 'score') return (b.score || 0) - (a.score || 0);
+      if (sortBy === 'semester') return (a.semester || 0) - (b.semester || 0) || (b.score || 0) - (a.score || 0);
+      if (sortBy === 'ects') return (b.ects || 0) - (a.ects || 0) || (b.score || 0) - (a.score || 0);
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      return 0;
+    });
+  }, [allRecommendations, filterType, sortBy, search]);
 
   const handleOpenCourse = (c) => {
     const isElective = c.elective || /^XXX/i.test(c.code);
@@ -82,51 +120,96 @@ export default function RecommendationsPage() {
   };
 
   /**
-   * US19: Give Feedback on Recommendations (👍 Like / 👎 Dislike)
+   * US19: Give Feedback on Recommendations with Instant Optimistic UI (0ms latency)
    */
-  const handleFeedback = async (course, isInterested) => {
-    setFeedbackLoading((prev) => ({ ...prev, [course.code]: true }));
-    try {
-      const res = await api.submitRecommendationFeedback(course.code, isInterested, data?.targetSemester);
+  const handleFeedback = (course, isInterested) => {
+    if (!data) return;
 
-      // QA Scenario 2: Student marks a mandatory course as not interesting
-      if (isInterested === false && course.isMandatory) {
-        toast.warn('Mandatory courses cannot be hidden');
-        setFeedbackLoading((prev) => ({ ...prev, [course.code]: false }));
-        return;
-      }
+    // Unique course key
+    const courseKey = course.id || (course.code && course.name ? `${course.code}:${course.name}` : course.code);
 
-      // QA Scenario 1: Student marks an optional course as not interesting -> hides card
-      if (isInterested === false) {
-        toast.info(`Marked "${course.code}" as not interesting`);
-      } else {
-        toast.success(`Marked "${course.code}" as interested`);
-      }
+    // Toggle off if user clicks the already active feedback button
+    const targetVal = course.feedback === isInterested ? null : isInterested;
 
-      // Update in-memory state
-      setData((prev) => {
-        if (!prev) return prev;
-        const updatedAll = prev.allRecommendations.map((c) =>
-          c.code === course.code ? { ...c, feedback: isInterested } : c
-        );
-
-        // If not interested and not mandatory, remove from recommended set
-        const updatedSet = (isInterested === false && !course.isMandatory)
-          ? prev.recommendedSet.filter((c) => c.code !== course.code)
-          : prev.recommendedSet.map((c) => (c.code === course.code ? { ...c, feedback: isInterested } : c));
-
-        return {
-          ...prev,
-          allRecommendations: updatedAll,
-          recommendedSet: updatedSet,
-          recommendedEctsTotal: updatedSet.reduce((sum, c) => sum + (c.ects || 5), 0),
-        };
-      });
-    } catch (err) {
-      toast.error('Failed to submit feedback: ' + err.message);
-    } finally {
-      setFeedbackLoading((prev) => ({ ...prev, [course.code]: false }));
+    // QA Scenario 2: Mandatory courses cannot be hidden
+    if (targetVal === false && course.isMandatory) {
+      toast.warn('Mandatory courses cannot be hidden');
+      return;
     }
+
+    // 1. Instant Optimistic Calculation in Memory (< 1ms)
+    const interestWeight = Number(data.activeWeights?.interestWeight) || 1.5;
+    let nextInterestBoost = 0;
+    if (targetVal === true) {
+      nextInterestBoost = Math.round(150 + 200 * interestWeight);
+    } else if (targetVal === false && !course.isMandatory) {
+      nextInterestBoost = -500;
+    }
+
+    const updatedAll = data.allRecommendations.map((c) => {
+      const cKey = c.id || (c.code && c.name ? `${c.code}:${c.name}` : c.code);
+      if (cKey !== courseKey) return c;
+      const b = c.scoreBreakdown || { base: 450, retakeBoost: 0, gpaBoost: 0, interestBoost: 0 };
+      const newScore = b.base + b.retakeBoost + b.gpaBoost + nextInterestBoost;
+      return {
+        ...c,
+        feedback: targetVal,
+        score: newScore,
+        scoreBreakdown: {
+          ...b,
+          interestBoost: nextInterestBoost,
+          total: newScore,
+        },
+      };
+    });
+
+    // Re-rank candidates: highest score first, then earliest semester
+    const ranked = updatedAll.slice().sort((a, b) => (b.score || 0) - (a.score || 0) || (a.semester || 0) - (b.semester || 0));
+
+    // Re-select recommended set fitting maxEctsLimit
+    let accEcts = 0;
+    const nextRecSet = [];
+    for (const cand of ranked) {
+      if (cand.feedback === false && !cand.isMandatory) continue; // Exclude disliked electives
+      const cEcts = Number(cand.ects) || 5;
+      if (accEcts + cEcts <= (data.maxEctsLimit || 21) || nextRecSet.length === 0) {
+        nextRecSet.push(cand);
+        accEcts += cEcts;
+      }
+    }
+
+    const optimisticData = {
+      ...data,
+      allRecommendations: updatedAll,
+      recommendedSet: nextRecSet,
+      recommendedEctsTotal: accEcts,
+    };
+
+    // Instant UI update (< 1ms)
+    setData(optimisticData);
+    globalRecCache = optimisticData;
+
+    // Fast feedback notification
+    const displayName = course.name || course.code;
+    if (targetVal === null) {
+      toast.info(`Cleared feedback for ${displayName}`);
+    } else if (targetVal === false) {
+      toast.info(`Marked "${displayName}" as not interesting`);
+    } else {
+      toast.success(`Marked "${displayName}" as interested`);
+    }
+
+    // 2. Non-blocking asynchronous backend synchronization
+    api.submitRecommendationFeedback(course.id || course.code, targetVal, data.targetSemester)
+      .catch((err) => {
+        console.error('[Feedback sync error]', err);
+        toast.error('Failed to sync feedback with server: ' + err.message);
+        // Rollback by refreshing from server
+        api.recommendations().then((fresh) => {
+          setData(fresh);
+          globalRecCache = fresh;
+        }).catch(console.error);
+      });
   };
 
   return (
@@ -165,6 +248,15 @@ export default function RecommendationsPage() {
                 {recommendedEcts} / {maxLimit} <span style={{ fontSize: '12px', fontWeight: 600 }}>ECTS</span>
               </div>
             </div>
+
+            {data?.activeWeights && (
+              <div style={{ background: '#f4f7fa', border: '1px solid var(--line)', padding: '6px 12px', borderRadius: '6px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 700 }}>Engine Weights (R/I/G)</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--blue-dark)', marginTop: '2px' }}>
+                  {data.activeWeights.retakeWeight}x / {data.activeWeights.interestWeight}x / {data.activeWeights.gpaWeight}x
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -180,9 +272,36 @@ export default function RecommendationsPage() {
         <section className="card" style={{ textAlign: 'center', padding: '28px' }}>
           <p className="muted">Analyzing your curriculum, prerequisites, and GPA…</p>
         </section>
+      ) : data?.isProgramDisabled ? (
+        <section
+          className="card"
+          style={{
+            textAlign: 'center',
+            padding: '36px 20px',
+            border: '2px solid #D9381E',
+            backgroundColor: '#fff8f7',
+            borderRadius: '8px',
+            marginBottom: '14px',
+          }}
+        >
+          <div style={{ fontSize: '40px', marginBottom: '12px' }}>🚫</div>
+          <h2 style={{ color: '#D9381E', margin: '0 0 8px 0', fontSize: '20px' }}>
+            AI Recommendations Disabled for Your Program
+          </h2>
+          <p style={{ maxWidth: '640px', margin: '0 auto 16px auto', color: '#1c2733', fontSize: '14px', lineHeight: 1.5 }}>
+            {data.disabledReason || `AI-driven course recommendations for ${data.studentProgram || 'your study program'} have been disabled by university academic policy.`}
+          </p>
+          <div style={{ display: 'inline-flex', gap: '8px', alignItems: 'center', backgroundColor: '#fff', border: '1px solid #fad2cf', padding: '6px 14px', borderRadius: '4px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#002B49' }}>Academic Program:</span>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: '#D9381E' }}>{data.studentProgram || 'Active Program'}</span>
+          </div>
+          <p className="muted small" style={{ marginTop: '16px', marginBottom: 0 }}>
+            Please consult your assigned academic advisor or refer to the official program curriculum to plan your semester courses.
+          </p>
+        </section>
       ) : (
         <>
-          {/* Recommended Set Section (Respects 21 ECTS Limit & US19 Feedback) */}
+          {/* Recommended Set Section (Respects ECTS Limit & US19 Feedback) */}
           <section className="card" style={{ marginBottom: '14px', borderLeft: '4px solid var(--blue)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
               <div>
@@ -213,10 +332,11 @@ export default function RecommendationsPage() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' }}>
                 {recommendedSet.map((c) => {
-                  const isBusy = !!feedbackLoading[c.code];
+                  const courseKey = c.id || `${c.code}:${c.name}`;
+                  const isBusy = !!feedbackLoading[courseKey];
                   return (
                     <div
-                      key={c.code}
+                      key={courseKey}
                       style={{
                         border: '1px solid var(--line)',
                         borderRadius: '6px',
@@ -296,8 +416,73 @@ export default function RecommendationsPage() {
                           </div>
                         </div>
 
-                        <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '8px', color: '#1c2733' }}>
+                        <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px', color: '#1c2733' }}>
                           {c.name}
+                        </div>
+
+                        {/* AI Score and Factor Badges */}
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px', alignItems: 'center' }}>
+                          <span
+                            style={{
+                              backgroundColor: '#e8edf2',
+                              color: 'var(--blue-dark)',
+                              border: '1px solid #b9c4cf',
+                              padding: '2px 7px',
+                              borderRadius: '3px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                            }}
+                            title="Overall ranking score calculated by the AI engine"
+                          >
+                            Score: {c.score}
+                          </span>
+                          {c.scoreBreakdown?.interestBoost > 0 && (
+                            <span
+                              style={{
+                                backgroundColor: '#e6f4ea',
+                                color: '#00773c',
+                                border: '1px solid #ceead6',
+                                padding: '2px 6px',
+                                borderRadius: '3px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                              }}
+                              title={`Boost from student interest: +${c.scoreBreakdown.interestBoost} pts`}
+                            >
+                              ★ Interest +{c.scoreBreakdown.interestBoost}
+                            </span>
+                          )}
+                          {c.scoreBreakdown?.gpaBoost > 0 && (
+                            <span
+                              style={{
+                                backgroundColor: '#f0f4f9',
+                                color: '#0070BA',
+                                border: '1px solid #d0e1fd',
+                                padding: '2px 6px',
+                                borderRadius: '3px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                              }}
+                              title={`Boost from GPA scaling: +${c.scoreBreakdown.gpaBoost} pts`}
+                            >
+                              ▲ GPA +{c.scoreBreakdown.gpaBoost}
+                            </span>
+                          )}
+                          {c.isRetake && (
+                            <span
+                              style={{
+                                backgroundColor: '#fce8e6',
+                                color: '#c5221f',
+                                border: '1px solid #fad2cf',
+                                padding: '2px 6px',
+                                borderRadius: '3px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                              }}
+                            >
+                              ⚡ Retake Priority
+                            </span>
+                          )}
                         </div>
 
                         {/* High-contrast, theme-consistent reason block */}
@@ -361,9 +546,9 @@ export default function RecommendationsPage() {
             )}
           </section>
 
-          {/* All Eligible Courses Section */}
+          {/* All Eligible Courses Section with Filters & Sorting */}
           <section className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
               <div>
                 <h2 style={{ margin: 0, color: 'var(--blue-dark)' }}>All Eligible Courses for Next Registration</h2>
                 <p className="muted small" style={{ margin: '2px 0 0' }}>
@@ -374,22 +559,72 @@ export default function RecommendationsPage() {
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <input
                   type="text"
-                  placeholder="Filter by code or title..."
+                  placeholder="Search code or title..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  style={{ padding: '4px 10px', fontSize: '13px', minWidth: 200 }}
+                  style={{ padding: '5px 10px', fontSize: '13px', minWidth: 200 }}
                 />
 
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  style={{ padding: '4px 8px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--line)' }}
-                >
-                  <option value="all">All Types</option>
-                  <option value="mandatory">Mandatory Only</option>
-                  <option value="elective">Electives Only</option>
-                </select>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <span className="small muted" style={{ fontWeight: 600, fontSize: '12px' }}>Sort:</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    style={{ padding: '4px 8px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--line)' }}
+                  >
+                    <option value="score">Highest AI Score</option>
+                    <option value="semester">Semester (Earliest)</option>
+                    <option value="ects">ECTS Load</option>
+                    <option value="name">Course Name (A-Z)</option>
+                  </select>
+                </div>
               </div>
+            </div>
+
+            {/* Quick Filter Buttons / Tabs */}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px', alignItems: 'center' }}>
+              <button
+                type="button"
+                className={filterType === 'all' ? 'btn btn-primary btn-mini' : 'btn btn-mini'}
+                onClick={() => setFilterType('all')}
+                style={{ fontWeight: 600 }}
+              >
+                All ({counts.all})
+              </button>
+              <button
+                type="button"
+                className={filterType === 'interested' ? 'btn btn-primary btn-mini' : 'btn btn-mini'}
+                onClick={() => setFilterType('interested')}
+                style={{ fontWeight: 600 }}
+              >
+                👍 Interested ({counts.interested})
+              </button>
+              {counts.retake > 0 && (
+                <button
+                  type="button"
+                  className={filterType === 'retake' ? 'btn btn-danger btn-mini' : 'btn btn-mini'}
+                  onClick={() => setFilterType('retake')}
+                  style={{ fontWeight: 600 }}
+                >
+                  ⚡ Retakes ({counts.retake})
+                </button>
+              )}
+              <button
+                type="button"
+                className={filterType === 'mandatory' ? 'btn btn-primary btn-mini' : 'btn btn-mini'}
+                onClick={() => setFilterType('mandatory')}
+                style={{ fontWeight: 600 }}
+              >
+                Mandatory ({counts.mandatory})
+              </button>
+              <button
+                type="button"
+                className={filterType === 'elective' ? 'btn btn-primary btn-mini' : 'btn btn-mini'}
+                onClick={() => setFilterType('elective')}
+                style={{ fontWeight: 600 }}
+              >
+                Electives ({counts.elective})
+              </button>
             </div>
 
             {filteredCourses.length === 0 ? (
@@ -406,6 +641,7 @@ export default function RecommendationsPage() {
                       <th>Semester</th>
                       <th>ECTS</th>
                       <th>Type</th>
+                      <th>AI Score & Factors</th>
                       <th>Recommendation Reason</th>
                       <th>Feedback</th>
                       <th>Action</th>
@@ -413,9 +649,10 @@ export default function RecommendationsPage() {
                   </thead>
                   <tbody>
                     {filteredCourses.map((c) => {
-                      const isBusy = !!feedbackLoading[c.code];
+                      const courseKey = c.id || `${c.code}:${c.name}`;
+                      const isBusy = !!feedbackLoading[courseKey];
                       return (
-                        <tr key={c.code}>
+                        <tr key={courseKey}>
                           <td><b className="code">{c.code}</b></td>
                           <td><b style={{ color: '#1c2733' }}>{c.name}</b></td>
                           <td className="c" style={{ color: '#1c2733' }}>Semester {c.semester}</td>
@@ -450,6 +687,28 @@ export default function RecommendationsPage() {
                                 Elective
                               </span>
                             )}
+                          </td>
+                          <td className="c">
+                            <div style={{ fontWeight: 700, color: 'var(--blue-dark)', fontSize: '13px' }}>
+                              {c.score} pts
+                            </div>
+                            <div style={{ display: 'flex', gap: '3px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '2px' }}>
+                              {c.scoreBreakdown?.interestBoost > 0 && (
+                                <span style={{ fontSize: '10px', color: '#00773c', fontWeight: 600, backgroundColor: '#e6f4ea', border: '1px solid #ceead6', padding: '1px 4px', borderRadius: '3px' }}>
+                                  +{c.scoreBreakdown.interestBoost} int
+                                </span>
+                              )}
+                              {c.scoreBreakdown?.gpaBoost > 0 && (
+                                <span style={{ fontSize: '10px', color: '#0070BA', fontWeight: 600, backgroundColor: '#f0f4f9', border: '1px solid #d0e1fd', padding: '1px 4px', borderRadius: '3px' }}>
+                                  +{c.scoreBreakdown.gpaBoost} gpa
+                                </span>
+                              )}
+                              {c.isRetake && (
+                                <span style={{ fontSize: '10px', color: '#c5221f', fontWeight: 700, backgroundColor: '#fce8e6', border: '1px solid #fad2cf', padding: '1px 4px', borderRadius: '3px' }}>
+                                  retake
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td style={{ fontSize: '12.5px', color: '#1c2733', lineHeight: 1.4 }}>{c.reason}</td>
                           <td className="c">

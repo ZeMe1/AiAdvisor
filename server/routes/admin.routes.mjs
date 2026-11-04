@@ -4,6 +4,7 @@ import { requireAdmin } from '../middlewares/auth.middleware.mjs';
 import { validateBody } from '../middlewares/validate.mjs';
 import { updateRoleSchema, blockUserSchema } from '../schemas/user.schema.mjs';
 import { createGroupSchema, assignAdvisorSchema, enrollStudentSchema } from '../schemas/group.schema.mjs';
+import { recommendationConfigSchema } from '../schemas/recommendation-config.schema.mjs';
 import { asyncHandler } from '../middlewares/error.middleware.mjs';
 
 const router = Router();
@@ -36,5 +37,10 @@ router.delete('/curriculums/:id', asyncHandler((req, res) => adminController.del
 router.get('/curriculums/:id/students', asyncHandler((req, res) => adminController.listCurriculumStudents(req, res)));
 router.post('/curriculums/:id/students', asyncHandler((req, res) => adminController.assignCurriculumStudent(req, res)));
 router.delete('/curriculums/:id/students/:username', asyncHandler((req, res) => adminController.removeCurriculumStudent(req, res)));
+
+// Recommendation Engine Configuration (US20)
+router.get('/recommendations/config', asyncHandler((req, res) => adminController.getRecommendationConfig(req, res)));
+router.put('/recommendations/config', validateBody(recommendationConfigSchema), asyncHandler((req, res) => adminController.updateRecommendationConfig(req, res)));
+router.post('/recommendations/config/reset', asyncHandler((req, res) => adminController.resetRecommendationConfig(req, res)));
 
 export default router;

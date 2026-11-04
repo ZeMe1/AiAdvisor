@@ -3,6 +3,7 @@ import { initDb, pool } from '../server/db.mjs';
 import { recommendationService } from '../server/services/recommendation.service.mjs';
 import { scheduleService } from '../server/services/schedule.service.mjs';
 import { prerequisiteService } from '../server/services/prerequisite.service.mjs';
+import { recommendationConfigRepository } from '../server/repositories/recommendation-config.repository.mjs';
 
 describe('US16: Get Personalized Course Recommendations', () => {
   beforeAll(async () => {
@@ -124,6 +125,16 @@ describe('US16: Get Personalized Course Recommendations', () => {
         'CRS 6': { eligible: true },
       },
     });
+    const configSpy = vi.spyOn(recommendationConfigRepository, 'getActiveConfig').mockResolvedValue({
+      version: 1,
+      min_ects: 20,
+      max_ects: 21,
+      gpa_weight: 1.0,
+      retake_weight: 2.0,
+      interest_weight: 1.5,
+      disabled_programs: [],
+      is_active: true,
+    });
 
     const res = await recommendationService.getRecommendations({ localUsername: 'test_student_limit' });
 
@@ -135,6 +146,7 @@ describe('US16: Get Personalized Course Recommendations', () => {
 
     getCurriculumSpy.mockRestore();
     evaluateSpy.mockRestore();
+    configSpy.mockRestore();
   });
 
   it('Prioritizes failed courses (retakes) with high score and retake reason', async () => {

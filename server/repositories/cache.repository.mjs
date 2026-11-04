@@ -64,25 +64,40 @@ export class CacheRepository {
   /** ----------------- Curriculum Cache (/api/curriculum) ----------------- */
   async getCurriculum(trackId, maxAgeMs = CURRICULUM_CACHE_TTL_MS) {
     if (!trackId) return null;
+    const key = String(trackId);
+    if (!global.__memCurriculumCache) global.__memCurriculumCache = new Map();
+    const inMem = global.__memCurriculumCache.get(key);
+    if (inMem && Date.now() - inMem.time < 600000) { // 10 min
+      return inMem.data;
+    }
+
     const { rows } = await pool.query(
       `SELECT curriculum, sections_defaults, cached_at
        FROM curriculum_cache
        WHERE track_id = $1`,
-      [String(trackId)]
+      [key]
     );
     if (rows.length === 0) return null;
     const row = rows[0];
     const age = Date.now() - new Date(row.cached_at).getTime();
     if (age > maxAgeMs) return null;
 
-    return {
+    const data = {
       curriculum: row.curriculum,
       sectionsDefaults: row.sections_defaults,
     };
+    global.__memCurriculumCache.set(key, { data, time: Date.now() });
+    return data;
   }
 
   async setCurriculum(trackId, curriculum, sectionsDefaults) {
     if (!trackId || !curriculum) return;
+    const key = String(trackId);
+    if (!global.__memCurriculumCache) global.__memCurriculumCache = new Map();
+    global.__memCurriculumCache.set(key, {
+      data: { curriculum, sectionsDefaults },
+      time: Date.now(),
+    });
     await pool.query(
       `INSERT INTO curriculum_cache (track_id, curriculum, sections_defaults, cached_at)
        VALUES ($1, $2::jsonb, $3::jsonb, NOW())
@@ -91,7 +106,7 @@ export class CacheRepository {
          sections_defaults = EXCLUDED.sections_defaults,
          cached_at = NOW()`,
       [
-        String(trackId),
+        key,
         JSON.stringify(curriculum),
         JSON.stringify(sectionsDefaults ?? null),
       ]

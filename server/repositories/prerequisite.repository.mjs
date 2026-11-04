@@ -19,8 +19,16 @@ export const DEFAULT_PREREQUISITES = [
   { course_code: 'CS 301', prereq_course_code: 'CS 201', min_grade: 'C', type: 'prerequisite' },
 ];
 
+// In-memory cache for fast prerequisite lookups
+let prereqCache = null;
+let prereqCacheExpiry = 0;
+const PREREQ_CACHE_TTL_MS = 60000; // 60s
+
 export class PrerequisiteRepository {
   async getAllPrerequisites() {
+    if (prereqCache && Date.now() < prereqCacheExpiry) {
+      return prereqCache;
+    }
     try {
       const res = await pool.query('SELECT course_code, prereq_course_code, min_grade, type FROM prerequisites');
       const dbRules = res.rows;
@@ -31,10 +39,17 @@ export class PrerequisiteRepository {
       for (const r of dbRules) {
         map.set(`${r.course_code.toUpperCase()}:${r.prereq_course_code.toUpperCase()}`, r);
       }
-      return Array.from(map.values());
+      prereqCache = Array.from(map.values());
+      prereqCacheExpiry = Date.now() + PREREQ_CACHE_TTL_MS;
+      return prereqCache;
     } catch {
       return DEFAULT_PREREQUISITES;
     }
+  }
+
+  clearCache() {
+    prereqCache = null;
+    prereqCacheExpiry = 0;
   }
 
   async getPrerequisitesForCourse(courseCode) {

@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useAuthStore } from '../stores/authStore.js';
 import { useToast } from '../shared/ui/Toast.jsx';
 import ConfirmModal from '../shared/ui/ConfirmModal.jsx';
+import { clearRecommendationsCache } from './RecommendationsPage.jsx';
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -69,6 +70,19 @@ export default function AdminPage() {
   const [showGroupHints, setShowGroupHints] = useState(false);
   const [showCurriculumHints, setShowCurriculumHints] = useState(false);
 
+  // Recommendation Engine Config state (US20)
+  const [recConfig, setRecConfig] = useState(null);
+  const [recHistory, setRecHistory] = useState([]);
+  const [loadingRecConfig, setLoadingRecConfig] = useState(false);
+  const [savingRecConfig, setSavingRecConfig] = useState(false);
+  const [formMinEcts, setFormMinEcts] = useState(20);
+  const [formMaxEcts, setFormMaxEcts] = useState(21);
+  const [formGpaWeight, setFormGpaWeight] = useState(1.0);
+  const [formRetakeWeight, setFormRetakeWeight] = useState(2.0);
+  const [formInterestWeight, setFormInterestWeight] = useState(1.5);
+  const [disabledPrograms, setDisabledPrograms] = useState([]);
+  const [configError, setConfigError] = useState('');
+
   // Confirmation Modal state
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
@@ -88,6 +102,8 @@ export default function AdminPage() {
       loadGroups();
     } else if (activeTab === 'curriculums') {
       loadCurriculums();
+    } else if (activeTab === 'recommendations') {
+      loadRecConfig();
     }
   }, [activeTab]);
 
@@ -336,6 +352,106 @@ export default function AdminPage() {
     } finally {
       setLoadingCurriculums(false);
     }
+  }
+
+  // --- Recommendation Engine Policy Actions (US20) ---
+  async function loadRecConfig() {
+    try {
+      setLoadingRecConfig(true);
+      setConfigError('');
+      const data = await api.adminGetRecommendationConfig();
+      if (data?.config) {
+        setRecConfig(data.config);
+        setFormMinEcts(data.config.min_ects);
+        setFormMaxEcts(data.config.max_ects);
+        setFormGpaWeight(data.config.gpa_weight);
+        setFormRetakeWeight(data.config.retake_weight);
+        setFormInterestWeight(data.config.interest_weight);
+        setDisabledPrograms(data.config.disabled_programs || []);
+      }
+      setRecHistory(data?.history || []);
+    } catch (e) {
+      toast.error('Failed to load recommendation config: ' + e.message);
+    } finally {
+      setLoadingRecConfig(false);
+    }
+  }
+
+  function handleSaveRecConfig(e) {
+    e.preventDefault();
+    setConfigError('');
+    const minVal = Number(formMinEcts);
+    const maxVal = Number(formMaxEcts);
+
+    if (minVal > maxVal) {
+      setConfigError('Min cannot be greater than max');
+      return;
+    }
+    if (minVal < 20) {
+      setConfigError('Minimum semester registration limit cannot be less than 20 ECTS');
+      return;
+    }
+    if (maxVal > 40) {
+      setConfigError('Maximum semester registration limit cannot exceed 40 ECTS');
+      return;
+    }
+
+    setModalConfig({
+      isOpen: true,
+      title: 'Update Recommendation Engine Policy',
+      message: `Save and publish new policy with semester limits ${minVal}–${maxVal} ECTS? Subsequent student study plans and recommendations will dynamically follow this configuration.`,
+      confirmText: 'Publish Policy',
+      isDanger: false,
+      onConfirm: async () => {
+        setModalConfig((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setSavingRecConfig(true);
+          const updated = await api.adminUpdateRecommendationConfig({
+            min_ects: minVal,
+            max_ects: maxVal,
+            gpa_weight: Number(formGpaWeight),
+            retake_weight: Number(formRetakeWeight),
+            interest_weight: Number(formInterestWeight),
+            disabled_programs: disabledPrograms,
+          });
+          clearRecommendationsCache();
+          toast.success(`Published recommendation configuration v${updated.version}!`);
+          loadRecConfig();
+        } catch (err) {
+          setConfigError(err.message);
+          toast.error('Failed to update config: ' + err.message);
+        } finally {
+          setSavingRecConfig(false);
+        }
+      },
+    });
+  }
+
+  function handleResetRecConfig() {
+    setModalConfig({
+      isOpen: true,
+      title: 'Reset Recommendation Policy to Defaults',
+      message: 'Are you sure you want to restore default recommendation engine parameters (20–21 ECTS, standard scoring weights)?',
+      confirmText: 'Reset to Defaults',
+      isDanger: true,
+      onConfirm: async () => {
+        setModalConfig((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const reset = await api.adminResetRecommendationConfig();
+          toast.success(`Restored default recommendation configuration v${reset.version}`);
+          clearRecommendationsCache();
+          loadRecConfig();
+        } catch (err) {
+          toast.error('Failed to reset config: ' + err.message);
+        }
+      },
+    });
+  }
+
+  function toggleProgramDisabled(prog) {
+    setDisabledPrograms((prev) =>
+      prev.includes(prog) ? prev.filter((p) => p !== prog) : [...prev, prog]
+    );
   }
 
   function handleFileSelected(e) {
@@ -632,6 +748,12 @@ export default function AdminPage() {
               onClick={() => setActiveTab('curriculums')}
             >
               Curriculums
+            </button>
+            <button
+              className={activeTab === 'recommendations' ? 'btn btn-primary' : 'btn'}
+              onClick={() => setActiveTab('recommendations')}
+            >
+              Recommendation Engine
             </button>
           </div>
         </div>
@@ -951,6 +1073,271 @@ export default function AdminPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= TAB 4: RECOMMENDATION ENGINE POLICY (US20) ================= */}
+        {activeTab === 'recommendations' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.8rem' }}>
+              <div>
+                <h3 style={{ margin: 0, color: 'var(--blue-dark)' }}>AI Recommendation Engine Configuration (US20)</h3>
+                <p className="muted small" style={{ margin: '3px 0 0' }}>
+                  Configure academic policy constraints, semester ECTS registration limits (Min 20 to Max 40 ECTS), and scoring model weights.
+                </p>
+              </div>
+
+              {recConfig && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span
+                    style={{
+                      backgroundColor: '#e6f4ea',
+                      color: '#00773c',
+                      border: '1px solid #ceead6',
+                      padding: '4px 10px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    Active Policy v{recConfig.version}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-mini btn-danger"
+                    onClick={handleResetRecConfig}
+                    style={{ padding: '4px 10px' }}
+                  >
+                    Reset to Defaults
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {configError && (
+              <div className="banner-error" style={{ marginBottom: '1rem' }}>
+                ⚠ {configError}
+              </div>
+            )}
+
+            {loadingRecConfig && !recConfig ? (
+              <p className="muted">Loading recommendation policy configuration...</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+                {/* Left Column: Configuration Form */}
+                <form
+                  onSubmit={handleSaveRecConfig}
+                  style={{
+                    backgroundColor: '#fafbfc',
+                    border: '1px solid var(--line)',
+                    borderRadius: '8px',
+                    padding: '1.25rem',
+                  }}
+                >
+                  <h4 style={{ margin: '0 0 1rem 0', color: 'var(--blue-dark)', borderBottom: '1px solid var(--line)', paddingBottom: '0.5rem' }}>
+                    ⚙️ Policy Parameters
+                  </h4>
+
+                  {/* Min / Max ECTS */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                    <div>
+                      <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                        Min ECTS Limit
+                      </label>
+                      <input
+                        type="number"
+                        min={20}
+                        max={40}
+                        required
+                        value={formMinEcts}
+                        onChange={(e) => setFormMinEcts(e.target.value)}
+                        style={{ width: '100%', padding: '6px 8px', fontSize: '14px', fontWeight: 600 }}
+                      />
+                      <span className="muted small" style={{ fontSize: '11px', display: 'block', marginTop: '2px' }}>
+                        Minimum 20 ECTS
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                        Max ECTS Limit
+                      </label>
+                      <input
+                        type="number"
+                        min={20}
+                        max={40}
+                        required
+                        value={formMaxEcts}
+                        onChange={(e) => setFormMaxEcts(e.target.value)}
+                        style={{ width: '100%', padding: '6px 8px', fontSize: '14px', fontWeight: 600 }}
+                      />
+                      <span className="muted small" style={{ fontSize: '11px', display: 'block', marginTop: '2px' }}>
+                        Maximum 40 ECTS
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Scoring Model Weights */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                      Retake Priority Multiplier ({formRetakeWeight}x)
+                    </label>
+                    <input
+                      type="range"
+                      min={1.0}
+                      max={4.0}
+                      step={0.1}
+                      value={formRetakeWeight}
+                      onChange={(e) => setFormRetakeWeight(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)' }}>
+                      <span>Normal (1.0x)</span>
+                      <span>High Priority (4.0x)</span>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                      Student Interest Weight ({formInterestWeight}x)
+                    </label>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={3.0}
+                      step={0.1}
+                      value={formInterestWeight}
+                      onChange={(e) => setFormInterestWeight(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)' }}>
+                      <span>Low (0.5x)</span>
+                      <span>Strong Influence (3.0x)</span>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '1.25rem' }}>
+                    <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                      GPA Scaling Weight ({formGpaWeight}x)
+                    </label>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={2.5}
+                      step={0.1}
+                      value={formGpaWeight}
+                      onChange={(e) => setFormGpaWeight(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)' }}>
+                      <span>Neutral (1.0x)</span>
+                      <span>High Impact (2.5x)</span>
+                    </div>
+                  </div>
+
+                  {/* Disabled Programs Selector */}
+                  <div style={{ marginBottom: '1.25rem' }}>
+                    <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                      Disable Recommendations for Specific Programs:
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {['Information Systems', 'Computer Science', 'Cyber Security', 'Mathematical and Computer Science'].map((prog) => {
+                        const isDis = disabledPrograms.includes(prog);
+                        return (
+                          <label
+                            key={prog}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontSize: '13px',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              backgroundColor: isDis ? '#fce8e6' : '#fff',
+                              border: isDis ? '1px solid #fad2cf' : '1px solid var(--line)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isDis}
+                              onChange={() => toggleProgramDisabled(prog)}
+                            />
+                            <span>{prog}</span>
+                            {isDis && (
+                              <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#c5221f', fontWeight: 600 }}>
+                                AI Disabled
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={savingRecConfig}
+                    style={{ width: '100%', padding: '8px 0', fontSize: '14px', fontWeight: 600 }}
+                  >
+                    {savingRecConfig ? 'Publishing Policy...' : `Save & Publish Policy (v${(recConfig?.version || 1) + 1})`}
+                  </button>
+                </form>
+
+                {/* Right Column: Version History */}
+                <div>
+                  <h4 style={{ margin: '0 0 0.75rem 0', color: 'var(--blue-dark)' }}>📜 Policy Version History</h4>
+                  <p className="muted small" style={{ margin: '0 0 1rem 0' }}>
+                    Audited ledger of recommendation engine configuration versions.
+                  </p>
+
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="tbl">
+                      <thead>
+                        <tr>
+                          <th>Ver</th>
+                          <th>Limits (Min–Max)</th>
+                          <th>Weights (R/I/G)</th>
+                          <th>Disabled</th>
+                          <th>Author</th>
+                          <th>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recHistory.map((h) => (
+                          <tr key={h.id}>
+                            <td className="c">
+                              <span
+                                style={{
+                                  fontWeight: 700,
+                                  color: h.is_active ? '#00773c' : '#5f6368',
+                                }}
+                              >
+                                v{h.version} {h.is_active && '●'}
+                              </span>
+                            </td>
+                            <td className="c" style={{ fontWeight: 600 }}>
+                              {h.min_ects}–{h.max_ects} ECTS
+                            </td>
+                            <td className="c small" style={{ fontSize: '11px' }}>
+                              {h.retake_weight}x / {h.interest_weight}x / {h.gpa_weight}x
+                            </td>
+                            <td className="c small">
+                              {h.disabled_programs?.length > 0 ? `${h.disabled_programs.length} progs` : 'None'}
+                            </td>
+                            <td className="small">{h.created_by || 'Admin'}</td>
+                            <td className="small muted">
+                              {h.created_at ? new Date(h.created_at).toLocaleDateString() : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
           </div>
