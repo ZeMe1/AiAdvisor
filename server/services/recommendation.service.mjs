@@ -6,6 +6,8 @@ import { recommendationRepository } from '../repositories/recommendation.reposit
 import { recommendationConfigRepository } from '../repositories/recommendation-config.repository.mjs';
 import { groupRepository } from '../repositories/group.repository.mjs';
 import { curriculumRepository } from '../repositories/curriculum.repository.mjs';
+import { cacheRepository } from '../repositories/cache.repository.mjs';
+import { calculateStudentSemesters } from './semester.utils.mjs';
 import { HttpError } from '../errors/http-error.mjs';
 
 /**
@@ -63,6 +65,7 @@ export class RecommendationService {
       assignedList,
       userFeedback,
       prereqRules,
+      studentData,
     ] = await Promise.all([
       scheduleService.getCurriculum(client),
       recommendationConfigRepository.getActiveConfig(),
@@ -70,6 +73,7 @@ export class RecommendationService {
       username ? curriculumRepository.listAssignedCurriculumsForUser(username).catch(() => []) : [],
       username ? recommendationRepository.getUserFeedback(username).catch(() => ({})) : {},
       prerequisiteRepository.getAllPrerequisites().catch(() => null),
+      username ? cacheRepository.getStudentData(username, Infinity).catch(() => null) : null,
     ]);
 
     // Check if student has assigned curriculum or uses SDU
@@ -180,19 +184,16 @@ export class RecommendationService {
 
     const gpaNum = parseFloat(cumulativeGpa);
 
-    // 2. Determine target next semester
-    // Find the lowest semester that still has incomplete courses
-    let targetSemester = 1;
-    for (const sem of (activeCurriculum?.semesters || [])) {
-      const hasIncomplete = sem.courses.some((c) => {
-        const code = c.code ? c.code.toUpperCase().trim() : '';
-        return code && !passedSet.has(code);
-      });
-      if (hasIncomplete) {
-        targetSemester = sem.no;
-        break;
-      }
-    }
+    // 2. Determine student's active semester using official SDU formula & in-progress courses (matching Roadmap)
+    const studentTerm = client?.term || studentData?.term || '2026 - 2027 Fall';
+    const semInfo = calculateStudentSemesters({
+      activeCurriculum,
+      studentTerm,
+      studentCourses: studentData?.approved || [],
+      passedSet,
+    });
+    const targetSemester = semInfo.targetSemester;
+    const currentSemester = semInfo.currentSemester;
 
     // 3. Evaluate prerequisites for all courses using preloaded rules
     const eligibilityResult = await prerequisiteService.evaluateCurriculum(activeCurriculum, prereqRules);
@@ -327,6 +328,7 @@ export class RecommendationService {
     return {
       gpa: cumulativeGpa,
       targetSemester,
+      currentSemester,
       completedCredits,
       minEctsLimit,
       maxEctsLimit,

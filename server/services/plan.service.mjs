@@ -5,6 +5,8 @@ import { recommendationRepository } from '../repositories/recommendation.reposit
 import { recommendationConfigRepository } from '../repositories/recommendation-config.repository.mjs';
 import { curriculumRepository } from '../repositories/curriculum.repository.mjs';
 import { planRepository } from '../repositories/plan.repository.mjs';
+import { cacheRepository } from '../repositories/cache.repository.mjs';
+import { calculateStudentSemesters } from './semester.utils.mjs';
 import { HttpError } from '../errors/http-error.mjs';
 
 export class PlanService {
@@ -15,13 +17,14 @@ export class PlanService {
   async generatePersonalizedPlan(client, { targetSemester = null, maxEcts = null } = {}) {
     const username = client?.localUsername;
 
-    // Parallel fetch of curriculum, configuration, feedback, and prerequisite rules
-    const [sduCurriculum, config, assignedList, userFeedback, prereqRules] = await Promise.all([
+    // Parallel fetch of curriculum, configuration, feedback, prerequisite rules, and student data
+    const [sduCurriculum, config, assignedList, userFeedback, prereqRules, studentData] = await Promise.all([
       scheduleService.getCurriculum(client),
       recommendationConfigRepository.getActiveConfig().catch(() => null),
       username ? curriculumRepository.listAssignedCurriculumsForUser(username).catch(() => []) : [],
       username ? recommendationRepository.getUserFeedback(username).catch(() => ({})) : {},
       prerequisiteRepository.getAllPrerequisites().catch(() => null),
+      username ? cacheRepository.getStudentData(username, Infinity).catch(() => null) : null,
     ]);
 
     let activeCurriculum = sduCurriculum;
@@ -60,21 +63,16 @@ export class PlanService {
       failedSet.delete(p);
     }
 
-    // 2. Determine target next semester
-    let targetSem = targetSemester ? parseInt(targetSemester, 10) : null;
-    if (!targetSem) {
-      targetSem = 1;
-      for (const sem of (activeCurriculum?.semesters || [])) {
-        const hasIncomplete = sem.courses.some((c) => {
-          const code = c.code ? c.code.toUpperCase().trim() : '';
-          return code && !passedSet.has(code);
-        });
-        if (hasIncomplete) {
-          targetSem = sem.no;
-          break;
-        }
-      }
-    }
+    // 2. Determine target registration semester using official SDU formula & in-progress courses (matching Roadmap)
+    const studentTerm = client?.term || studentData?.term || '2026 - 2027 Fall';
+    const semInfo = calculateStudentSemesters({
+      activeCurriculum,
+      studentTerm,
+      studentCourses: studentData?.approved || [],
+      passedSet,
+    });
+    const currentSem = semInfo.currentSemester;
+    let targetSem = targetSemester ? parseInt(targetSemester, 10) : semInfo.targetSemester;
 
     // 3. Evaluate prerequisites for all courses
     const eligibilityResult = await prerequisiteService.evaluateCurriculum(activeCurriculum, prereqRules);
@@ -215,6 +213,7 @@ export class PlanService {
     return {
       success: true,
       targetSemester: targetSem,
+      currentSemester: currentSem,
       minEctsLimit,
       maxEctsLimit,
       totalEcts: accEcts,

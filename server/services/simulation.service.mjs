@@ -3,6 +3,8 @@ import { prerequisiteService } from './prerequisite.service.mjs';
 import { prerequisiteRepository } from '../repositories/prerequisite.repository.mjs';
 import { recommendationConfigRepository } from '../repositories/recommendation-config.repository.mjs';
 import { curriculumRepository } from '../repositories/curriculum.repository.mjs';
+import { cacheRepository } from '../repositories/cache.repository.mjs';
+import { calculateStudentSemesters } from './semester.utils.mjs';
 
 /**
  * Advances an academic term string (e.g. "2026 - 2027 Fall") by a given number of semesters.
@@ -101,12 +103,13 @@ export class SimulationService {
     const targetEcts = Math.max(5, Math.min(60, Number(targetEctsPerSemester) || 21));
     const semestersToSimulate = Math.max(1, Math.min(8, Number(numSemesters) || 2));
 
-    // Parallel fetch of curriculum, active config, and prerequisite rules
-    const [sduCurriculum, config, assignedList, prereqRules] = await Promise.all([
+    // Parallel fetch of curriculum, active config, prerequisite rules, and cached student data
+    const [sduCurriculum, config, assignedList, prereqRules, studentData] = await Promise.all([
       scheduleService.getCurriculum(client),
       recommendationConfigRepository.getActiveConfig().catch(() => null),
       username ? curriculumRepository.listAssignedCurriculumsForUser(username).catch(() => []) : [],
       prerequisiteRepository.getAllPrerequisites().catch(() => null),
+      username ? cacheRepository.getStudentData(username, Infinity).catch(() => null) : null,
     ]);
 
     let activeCurriculum = sduCurriculum;
@@ -181,19 +184,15 @@ export class SimulationService {
 
     const remainingEcts = Math.max(0, totalCurriculumEcts - completedEcts);
 
-    // 3. Current Academic Term & Starting Semester
-    const currentTerm = client?.term || '2026 - 2027 Fall';
-    let currentSemesterNo = 1;
-    for (const sem of (activeCurriculum?.semesters || [])) {
-      const hasIncomplete = sem.courses.some((c) => {
-        const code = c.code ? c.code.toUpperCase().trim() : '';
-        return code && !passedSet.has(code);
-      });
-      if (hasIncomplete) {
-        currentSemesterNo = sem.no;
-        break;
-      }
-    }
+    // 3. Current Academic Term & Starting Semester (matching Roadmap calculation)
+    const currentTerm = client?.term || studentData?.term || '2026 - 2027 Fall';
+    const semInfo = calculateStudentSemesters({
+      activeCurriculum,
+      studentTerm: currentTerm,
+      studentCourses: studentData?.approved || [],
+      passedSet,
+    });
+    const currentSemesterNo = semInfo.currentSemester;
 
     // 4. Projected Graduation Calculation
     const baselineEcts = Number(config?.max_ects) || 21;
