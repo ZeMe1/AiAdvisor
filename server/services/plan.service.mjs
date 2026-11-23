@@ -39,28 +39,48 @@ export class PlanService {
       s.courses.map((c) => ({ ...c, semesterNo: s.no }))
     ) || [];
 
-    // 1. Analyze student progress & find failed courses (retakes)
+    // 1. Analyze student progress, in-progress courses, & failed courses (retakes)
     const passedSet = new Set();
     const failedSet = new Set();
+    const inProgressSet = new Set();
+    const passedNames = new Set();
+    const inProgressNames = new Set();
 
-    for (const c of allCourses) {
+    const normCourseName = (n) => String(n || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const isGenericName = (code, normName) =>
+      !normName || /^xxx/i.test(code) || normName.includes('elective');
+
+    for (const sItem of (studentData?.schedule || [])) {
+      if (sItem?.code) inProgressSet.add(sItem.code.toUpperCase().trim());
+    }
+
+    const combinedTranscript = [...allCourses, ...(Array.isArray(studentData?.approved) ? studentData.approved : [])];
+
+    for (const c of combinedTranscript) {
       const code = c.code ? c.code.toUpperCase().trim() : '';
       if (!code) continue;
 
       const grade = c.grade ? c.grade.toUpperCase().trim() : null;
-      const isPassed = c.status === 'passed' || (grade && grade !== 'F' && grade !== 'FX' && grade !== 'I' && grade !== 'NA');
+      const isTakenNow = c.status === 'taken' || grade === 'IP';
+      const isPassed = !isTakenNow && (c.status === 'passed' || (grade && !['F', 'FX', 'I', 'NA', 'IP'].includes(grade)));
       const isFailed = c.status === 'failed' || grade === 'F' || grade === 'FX';
+      const normName = normCourseName(c.name);
 
-      if (isPassed) {
+      if (isTakenNow) {
+        inProgressSet.add(code);
+        if (!isGenericName(code, normName)) inProgressNames.add(normName);
+      } else if (isPassed) {
         passedSet.add(code);
+        if (!isGenericName(code, normName)) passedNames.add(normName);
       } else if (isFailed) {
         failedSet.add(code);
       }
     }
 
-    // Unmark failed courses that were subsequently retaken and passed
+    // Unmark failed or in-progress courses that were subsequently retaken and passed
     for (const p of passedSet) {
       failedSet.delete(p);
+      inProgressSet.delete(p);
     }
 
     // 2. Determine target registration semester using official SDU formula & in-progress courses (matching Roadmap)
@@ -91,7 +111,9 @@ export class PlanService {
 
     for (const c of allCourses) {
       const code = c.code ? c.code.toUpperCase().trim() : '';
-      if (!code || passedSet.has(code)) continue;
+      const normName = normCourseName(c.name);
+      const nameAlreadyHandled = !isGenericName(code, normName) && (passedNames.has(normName) || inProgressNames.has(normName));
+      if (!code || passedSet.has(code) || inProgressSet.has(code) || nameAlreadyHandled) continue;
 
       const isEligible = eligibilityMap[code]?.eligible === true;
       if (!isEligible) continue;

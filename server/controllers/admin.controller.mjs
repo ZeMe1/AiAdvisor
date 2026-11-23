@@ -2,6 +2,8 @@ import { userService } from '../services/user.service.mjs';
 import { groupService } from '../services/group.service.mjs';
 import { curriculumService } from '../services/curriculum.service.mjs';
 import { recommendationService } from '../services/recommendation.service.mjs';
+import { guardrailService } from '../services/guardrail.service.mjs';
+import { assistantLogsService } from '../services/assistant-logs.service.mjs';
 
 export class AdminController {
   async listUsers(req, res) {
@@ -138,6 +140,47 @@ export class AdminController {
     const adminUsername = req.client?.localUsername || req.session?.username || 'Administrator';
     const reset = await recommendationService.resetConfig(adminUsername);
     res.json(reset);
+  }
+
+  // --- AI Assistant Guardrails Configuration (US24) ---
+  async getGuardrailConfig(req, res) {
+    const data = await guardrailService.getConfig();
+    res.json(data);
+  }
+
+  async updateGuardrailConfig(req, res) {
+    const adminUsername = req.client?.localUsername || req.session?.username || 'Administrator';
+    const updated = await guardrailService.updateConfig(req.body, adminUsername);
+    res.json(updated);
+  }
+
+  async resetGuardrailConfig(req, res) {
+    const adminUsername = req.client?.localUsername || req.session?.username || 'Administrator';
+    const reset = await guardrailService.resetConfig(adminUsername);
+    res.json(reset);
+  }
+
+  // --- Assistant Conversation Logs & ML Review Queue (US25) ---
+  async getAssistantLogs(req, res) {
+    const { group, status, period, from, to } = req.query;
+    const data = await assistantLogsService.getLogsDashboard({ group, status, period, from, to });
+    res.json(data);
+  }
+
+  async flagAssistantLog(req, res) {
+    const adminUsername = req.client?.localUsername || req.session?.username || 'Administrator';
+    const flagged = await assistantLogsService.flagAnswer(req.params.messageId, req.body, adminUsername);
+    res.json(flagged);
+  }
+
+  async removeAssistantLogFlag(req, res) {
+    const result = await assistantLogsService.removeFlag(req.params.messageId);
+    res.json(result);
+  }
+
+  async purgeAssistantLogs(req, res) {
+    const result = await assistantLogsService.purgeExpiredLogs();
+    res.json(result);
   }
 }
 

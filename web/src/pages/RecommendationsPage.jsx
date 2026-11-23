@@ -37,15 +37,41 @@ export default function RecommendationsPage() {
 
   useEffect(() => {
     let mounted = true;
+    const normalizePlan = (p) => {
+      if (!p) return null;
+      return {
+        ...p,
+        targetSemester: p.targetSemester ?? p.target_semester ?? 1,
+        totalEcts: p.totalEcts ?? p.total_ects ?? 0,
+        courses: Array.isArray(p.courses) ? p.courses : [],
+      };
+    };
+
     api.getSavedPlan()
       .then((res) => {
         if (mounted && res?.plan) {
-          setPlanData(res.plan);
+          setPlanData(normalizePlan(res.plan));
           setPlanApproved(true);
         }
       })
       .catch(() => {});
-    return () => { mounted = false; };
+
+    const onPlanUpdated = (e) => {
+      if (!mounted) return;
+      if (e?.detail === null) {
+        setPlanData(null);
+        setPlanApproved(false);
+      } else if (e?.detail) {
+        setPlanData(normalizePlan(e.detail));
+        setPlanApproved(true);
+      }
+    };
+    window.addEventListener('zeme:plan-updated', onPlanUpdated);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('zeme:plan-updated', onPlanUpdated);
+    };
   }, [currentUsername]);
 
   useEffect(() => {
@@ -266,6 +292,31 @@ export default function RecommendationsPage() {
       toast.success('Study plan approved and saved! Your Roadmap is now updated with your planned courses.');
     } catch (err) {
       toast.error('Failed to save study plan: ' + err.message);
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  const handleRemovePlanCourse = async (courseCode) => {
+    if (!planData || !courseCode) return;
+    setPlanLoading(true);
+    try {
+      const res = await api.removeChatCourseFromPlan(courseCode, planData.targetSemester);
+      if (res.plan) {
+        setPlanData({
+          ...res.plan,
+          targetSemester: res.plan.targetSemester ?? res.plan.target_semester ?? planData.targetSemester,
+          totalEcts: res.plan.totalEcts ?? res.plan.total_ects ?? res.totalEcts,
+        });
+        setPlanApproved(true);
+      } else {
+        setPlanData(null);
+        setPlanApproved(false);
+      }
+      window.dispatchEvent(new CustomEvent('zeme:plan-updated', { detail: res.plan || null }));
+      toast.info(`Removed ${courseCode} from your study plan`);
+    } catch (err) {
+      toast.error('Failed to remove course: ' + err.message);
     } finally {
       setPlanLoading(false);
     }
@@ -535,9 +586,15 @@ export default function RecommendationsPage() {
                         </div>
 
                         <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span className="small muted" style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8' }}>
-                            {c.isRetake ? 'Retake Priority' : c.isMandatory ? 'Core Requirement' : 'Elective Course'}
-                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-danger btn-mini"
+                            disabled={planLoading}
+                            onClick={() => handleRemovePlanCourse(c.code)}
+                            style={{ fontSize: '11.5px', padding: '3px 9px', fontWeight: 600 }}
+                          >
+                            Remove
+                          </button>
 
                           <button
                             type="button"

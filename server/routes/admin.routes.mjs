@@ -5,6 +5,8 @@ import { validateBody } from '../middlewares/validate.mjs';
 import { updateRoleSchema, blockUserSchema } from '../schemas/user.schema.mjs';
 import { createGroupSchema, assignAdvisorSchema, enrollStudentSchema } from '../schemas/group.schema.mjs';
 import { recommendationConfigSchema } from '../schemas/recommendation-config.schema.mjs';
+import { guardrailConfigSchema } from '../schemas/guardrail-config.schema.mjs';
+import { flagAssistantLogSchema } from '../schemas/assistant-logs.schema.mjs';
 import { asyncHandler } from '../middlewares/error.middleware.mjs';
 
 const router = Router();
@@ -42,5 +44,16 @@ router.delete('/curriculums/:id/students/:username', asyncHandler((req, res) => 
 router.get('/recommendations/config', asyncHandler((req, res) => adminController.getRecommendationConfig(req, res)));
 router.put('/recommendations/config', validateBody(recommendationConfigSchema), asyncHandler((req, res) => adminController.updateRecommendationConfig(req, res)));
 router.post('/recommendations/config/reset', asyncHandler((req, res) => adminController.resetRecommendationConfig(req, res)));
+
+// AI Assistant Guardrails Configuration (US24)
+router.get('/guardrails/config', asyncHandler((req, res) => adminController.getGuardrailConfig(req, res)));
+router.put('/guardrails/config', validateBody(guardrailConfigSchema), asyncHandler((req, res) => adminController.updateGuardrailConfig(req, res)));
+router.post('/guardrails/config/reset', asyncHandler((req, res) => adminController.resetGuardrailConfig(req, res)));
+
+// Assistant Conversation Logs & ML Review Queue (US25)
+router.get('/assistant-logs', asyncHandler((req, res) => adminController.getAssistantLogs(req, res)));
+router.post('/assistant-logs/:messageId/flag', validateBody(flagAssistantLogSchema), asyncHandler((req, res) => adminController.flagAssistantLog(req, res)));
+router.delete('/assistant-logs/:messageId/flag', asyncHandler((req, res) => adminController.removeAssistantLogFlag(req, res)));
+router.post('/assistant-logs/purge', asyncHandler((req, res) => adminController.purgeAssistantLogs(req, res)));
 
 export default router;

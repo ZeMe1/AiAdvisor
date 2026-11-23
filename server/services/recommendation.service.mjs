@@ -150,32 +150,56 @@ export class RecommendationService {
     const completedSet = new Set();
     const passedSet = new Set();
     const failedSet = new Set();
+    const inProgressSet = new Set();
+    const passedNames = new Set();
+    const inProgressNames = new Set();
 
-    for (const c of allCourses) {
+    const normCourseName = (n) => String(n || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const isGenericName = (code, normName) =>
+      !normName || /^xxx/i.test(code) || normName.includes('elective');
+
+    for (const sItem of (studentData?.schedule || [])) {
+      if (sItem?.code) inProgressSet.add(sItem.code.toUpperCase().trim());
+    }
+
+    // Merge studentData.approved so passed/in-progress courses from SDU registrations are always excluded too
+    const combinedTranscript = [...allCourses, ...(Array.isArray(studentData?.approved) ? studentData.approved : [])];
+
+    for (const c of combinedTranscript) {
       const code = c.code ? c.code.toUpperCase().trim() : '';
       if (!code) continue;
 
       const ects = Number(c.ects) || 5;
       const grade = c.grade ? c.grade.toUpperCase().trim() : null;
-      const isPassed = c.status === 'passed' || (grade && grade !== 'F' && grade !== 'FX' && grade !== 'I' && grade !== 'NA');
+      const isTakenNow = c.status === 'taken' || grade === 'IP';
+      const isPassed = !isTakenNow && (c.status === 'passed' || (grade && !['F', 'FX', 'I', 'NA', 'IP'].includes(grade)));
       const isFailed = c.status === 'failed' || grade === 'F' || grade === 'FX';
+      const normName = normCourseName(c.name);
 
-      if (isPassed) {
+      if (isTakenNow) {
+        inProgressSet.add(code);
+        if (!isGenericName(code, normName)) inProgressNames.add(normName);
+      } else if (isPassed) {
+        const alreadyCounted = passedSet.has(code);
         passedSet.add(code);
         completedSet.add(code);
-        completedCredits += ects;
-        if (grade && GRADE_POINTS[grade] !== undefined) {
-          totalQualityPoints += GRADE_POINTS[grade] * ects;
-          totalGpaEcts += ects;
+        if (!isGenericName(code, normName)) passedNames.add(normName);
+        if (!alreadyCounted) {
+          completedCredits += ects;
+          if (grade && GRADE_POINTS[grade] !== undefined) {
+            totalQualityPoints += GRADE_POINTS[grade] * ects;
+            totalGpaEcts += ects;
+          }
         }
       } else if (isFailed) {
         failedSet.add(code);
       }
     }
 
-    // Remove any failed courses that were subsequently passed
+    // Remove any failed or in-progress marks that were subsequently passed
     for (const p of passedSet) {
       failedSet.delete(p);
+      inProgressSet.delete(p);
     }
 
     const cumulativeGpa = totalGpaEcts > 0
@@ -204,7 +228,9 @@ export class RecommendationService {
 
     for (const c of allCourses) {
       const code = c.code ? c.code.toUpperCase().trim() : '';
-      if (!code || passedSet.has(code)) continue;
+      const normName = normCourseName(c.name);
+      const nameAlreadyHandled = !isGenericName(code, normName) && (passedNames.has(normName) || inProgressNames.has(normName));
+      if (!code || passedSet.has(code) || inProgressSet.has(code) || nameAlreadyHandled) continue;
 
       const el = eligibilityMap[code];
       const isEligible = el?.eligible === true;

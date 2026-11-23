@@ -2,17 +2,32 @@ import { pool } from '../db.mjs';
 
 export class CurriculumRepository {
   async getCatalogCourses() {
-    const res = await pool.query(`
-      SELECT code, name, ects FROM course_catalog
-      UNION
-      SELECT course_code AS code, course_code AS name, 5 AS ects FROM prerequisites
-      UNION
-      SELECT prereq_code AS code, prereq_code AS name, 5 AS ects FROM prerequisites
-    `);
+    let res;
+    try {
+      res = await pool.query(`
+        SELECT code, name, ects, description FROM course_catalog
+        UNION
+        SELECT course_code AS code, course_code AS name, 5 AS ects, NULL AS description FROM prerequisites
+        UNION
+        SELECT prereq_course_code AS code, prereq_course_code AS name, 5 AS ects, NULL AS description FROM prerequisites
+      `);
+    } catch {
+      res = await pool.query(`
+        SELECT code, name, ects FROM course_catalog
+        UNION
+        SELECT course_code AS code, course_code AS name, 5 AS ects FROM prerequisites
+        UNION
+        SELECT prereq_code AS code, prereq_code AS name, 5 AS ects FROM prerequisites
+      `);
+    }
     const map = new Map();
     for (const row of res.rows) {
       if (row.code) {
-        map.set(row.code.toUpperCase().trim(), row);
+        const key = row.code.toUpperCase().trim();
+        const existing = map.get(key);
+        if (!existing || (row.description && !existing.description)) {
+          map.set(key, row);
+        }
       }
     }
     return map;
@@ -24,21 +39,30 @@ export class CurriculumRepository {
     const res = await pool.query(
       `SELECT 1 FROM course_catalog WHERE UPPER(code) = $1
        UNION
-       SELECT 1 FROM prerequisites WHERE UPPER(course_code) = $1 OR UPPER(prereq_code) = $1
+       SELECT 1 FROM prerequisites WHERE UPPER(course_code) = $1 OR UPPER(prereq_course_code) = $1
        LIMIT 1`,
       [cleanCode]
     );
     return res.rowCount > 0;
   }
 
-  async addCatalogCourse(code, name, ects = 5) {
+  async addCatalogCourse(code, name, ects = 5, description = null) {
     const cleanCode = code.toUpperCase().trim();
-    await pool.query(
-      `INSERT INTO course_catalog (code, name, ects)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, ects = EXCLUDED.ects`,
-      [cleanCode, name || cleanCode, ects]
-    );
+    try {
+      await pool.query(
+        `INSERT INTO course_catalog (code, name, ects, description)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, ects = EXCLUDED.ects, description = COALESCE(EXCLUDED.description, course_catalog.description)`,
+        [cleanCode, name || cleanCode, ects, description]
+      );
+    } catch {
+      await pool.query(
+        `INSERT INTO course_catalog (code, name, ects)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, ects = EXCLUDED.ects`,
+        [cleanCode, name || cleanCode, ects]
+      );
+    }
   }
 
   async createCurriculum({ program, academic_year, version_title, is_published = false }) {

@@ -13,9 +13,20 @@ import authRoutes from './routes/auth.routes.mjs';
 import scheduleRoutes from './routes/schedule.routes.mjs';
 import userRoutes from './routes/user.routes.mjs';
 import adminRoutes from './routes/admin.routes.mjs';
+import chatRoutes from './routes/chat.routes.mjs';
+import { assistantLogsService } from './services/assistant-logs.service.mjs';
 
-// Инициализация структуры БД
-initDb().catch(console.error);
+// Инициализация структуры БД + очистка логов старше 1 академического года (US25)
+initDb()
+  .then(() => assistantLogsService.purgeExpiredLogs().catch(() => {}))
+  .catch(console.error);
+
+if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
+  const retentionTimer = setInterval(() => {
+    assistantLogsService.purgeExpiredLogs().catch(() => {});
+  }, 24 * 60 * 60 * 1000);
+  retentionTimer.unref?.();
+}
 
 const PORT = Number(process.env.PORT || 3001);
 const DEMO = process.env.DEMO === '1';
@@ -31,6 +42,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api', scheduleRoutes);
 app.use('/api', userRoutes);
+app.use('/api/chat', chatRoutes);
 
 // ------------------------------------------------- Статика фронтенда
 const webDist = path.resolve('web/dist');
