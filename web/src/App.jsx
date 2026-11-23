@@ -14,6 +14,7 @@ import AdminPage from './pages/AdminPage.jsx';
 import RoadmapPage from './pages/RoadmapPage.jsx';
 import RecommendationsPage from './pages/RecommendationsPage.jsx';
 import SimulationPage from './pages/SimulationPage.jsx';
+import AiAssistantChat from './components/AiAssistantChat.jsx';
 
 export default function App() {
   const { stage, loginNotice, error, setError, checkAuth, login, submit2fa } = useAuthStore();
@@ -55,6 +56,7 @@ export default function App() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          <AiAssistantChat />
         </div>
       </BrowserRouter>
     </ToastProvider>

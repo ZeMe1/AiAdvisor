@@ -66,4 +66,23 @@ export const api = {
   adminGetRecommendationConfig: () => j('/api/admin/recommendations/config'),
   adminUpdateRecommendationConfig: (body) => j('/api/admin/recommendations/config', { method: 'PUT', body: JSON.stringify(body) }),
   adminResetRecommendationConfig: () => j('/api/admin/recommendations/config/reset', { method: 'POST' }),
+  adminGetGuardrailConfig: () => j('/api/admin/guardrails/config'),
+  adminUpdateGuardrailConfig: (body) => j('/api/admin/guardrails/config', { method: 'PUT', body: JSON.stringify(body) }),
+  adminResetGuardrailConfig: () => j('/api/admin/guardrails/config/reset', { method: 'POST' }),
+  adminGetAssistantLogs: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    ).toString();
+    return j(`/api/admin/assistant-logs${qs ? `?${qs}` : ''}`);
+  },
+  adminFlagAssistantLog: (messageId, body) =>
+    j(`/api/admin/assistant-logs/${encodeURIComponent(messageId)}/flag`, post(body)),
+  adminRemoveAssistantLogFlag: (messageId) =>
+    j(`/api/admin/assistant-logs/${encodeURIComponent(messageId)}/flag`, { method: 'DELETE' }),
+  adminPurgeAssistantLogs: () => j('/api/admin/assistant-logs/purge', { method: 'POST' }),
+  getChatMessages: () => j('/api/chat/messages'),
+  sendChatMessage: (message) => j('/api/chat/message', post({ message })),
+  addChatCourseToPlan: (courseCode, targetSemester) => j('/api/chat/plan/add', post({ courseCode, targetSemester })),
+  removeChatCourseFromPlan: (courseCode, targetSemester) => j('/api/chat/plan/remove', post({ courseCode, targetSemester })),
+  clearChatMessages: () => j('/api/chat/messages', { method: 'DELETE' }),
 };

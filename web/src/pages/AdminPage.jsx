@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useAuthStore } from '../stores/authStore.js';
 import { useToast } from '../shared/ui/Toast.jsx';
 import ConfirmModal from '../shared/ui/ConfirmModal.jsx';
+import EnglishDatePicker from '../shared/ui/EnglishDatePicker.jsx';
 import { clearRecommendationsCache } from './RecommendationsPage.jsx';
 
 export default function AdminPage() {
@@ -83,6 +84,33 @@ export default function AdminPage() {
   const [disabledPrograms, setDisabledPrograms] = useState([]);
   const [configError, setConfigError] = useState('');
 
+  // AI Guardrails Config state (US24)
+  const [guardrailConfig, setGuardrailConfig] = useState(null);
+  const [loadingGuardrails, setLoadingGuardrails] = useState(false);
+  const [savingGuardrails, setSavingGuardrails] = useState(false);
+  const [guardrailError, setGuardrailError] = useState('');
+  const [blockedCategories, setBlockedCategories] = useState(['politics', 'medical', 'legal', 'personal']);
+  const [customKeywordsText, setCustomKeywordsText] = useState('');
+  const [refusalEn, setRefusalEn] = useState('');
+  const [refusalRu, setRefusalRu] = useState('');
+  const [disclaimerText, setDisclaimerText] = useState('');
+  const [dropDeadline, setDropDeadline] = useState('');
+  const [regDeadline, setRegDeadline] = useState('');
+  const [retakeRule, setRetakeRule] = useState('');
+  const [redactSensitiveData, setRedactSensitiveData] = useState(true);
+
+  // Assistant Conversation Logs state (US25)
+  const [logsData, setLogsData] = useState(null);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [logGroupFilter, setLogGroupFilter] = useState('all');
+  const [logPeriodFilter, setLogPeriodFilter] = useState('all');
+  const [logStatusFilter, setLogStatusFilter] = useState('all');
+  const [logFromDate, setLogFromDate] = useState('');
+  const [logToDate, setLogToDate] = useState('');
+  const [flagComments, setFlagComments] = useState({});
+  const [flaggingMsgId, setFlaggingMsgId] = useState(null);
+  const [purgingLogs, setPurgingLogs] = useState(false);
+
   // Confirmation Modal state
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
@@ -104,6 +132,10 @@ export default function AdminPage() {
       loadCurriculums();
     } else if (activeTab === 'recommendations') {
       loadRecConfig();
+    } else if (activeTab === 'guardrails') {
+      loadGuardrailConfig();
+    } else if (activeTab === 'logs') {
+      loadAssistantLogs();
     }
   }, [activeTab]);
 
@@ -454,6 +486,198 @@ export default function AdminPage() {
     );
   }
 
+  // --- AI Guardrails Config actions (US24) ---
+  function applyGuardrailForm(cfg) {
+    if (!cfg) return;
+    setGuardrailConfig(cfg);
+    setBlockedCategories(Array.isArray(cfg.blocked_categories) ? cfg.blocked_categories : []);
+    setCustomKeywordsText(
+      Array.isArray(cfg.custom_blocked_keywords) ? cfg.custom_blocked_keywords.join(', ') : ''
+    );
+    setRefusalEn(cfg.refusal_message_en || '');
+    setRefusalRu(cfg.refusal_message_ru || '');
+    setDisclaimerText(cfg.disclaimer_text || '');
+    setDropDeadline(cfg.official_deadlines?.drop_deadline || '');
+    setRegDeadline(cfg.official_deadlines?.registration_deadline || '');
+    setRetakeRule(cfg.official_deadlines?.retake_rule || '');
+    setRedactSensitiveData(cfg.redact_sensitive_data !== false);
+  }
+
+  async function loadGuardrailConfig() {
+    try {
+      setLoadingGuardrails(true);
+      setGuardrailError('');
+      const data = await api.adminGetGuardrailConfig();
+      applyGuardrailForm(data);
+    } catch (e) {
+      toast.error('Failed to load AI guardrail settings: ' + e.message);
+    } finally {
+      setLoadingGuardrails(false);
+    }
+  }
+
+  function toggleBlockedCategory(cat) {
+    setBlockedCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
+  }
+
+  async function handleSaveGuardrailConfig(e) {
+    e.preventDefault();
+    setGuardrailError('');
+    const customKeywords = customKeywordsText
+      .split(/[\n,]+/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+
+    try {
+      setSavingGuardrails(true);
+      const updated = await api.adminUpdateGuardrailConfig({
+        blocked_categories: blockedCategories,
+        custom_blocked_keywords: customKeywords,
+        refusal_message_en: refusalEn.trim(),
+        refusal_message_ru: refusalRu.trim(),
+        disclaimer_text: disclaimerText.trim(),
+        official_deadlines: {
+          drop_deadline: dropDeadline.trim(),
+          registration_deadline: regDeadline.trim(),
+          retake_rule: retakeRule.trim(),
+        },
+        redact_sensitive_data: Boolean(redactSensitiveData),
+      });
+      applyGuardrailForm(updated);
+      toast.success(`Saved AI Guardrail policy v${updated.version} (live without restart)!`);
+    } catch (err) {
+      setGuardrailError(err.message);
+      toast.error('Failed to save guardrails: ' + err.message);
+    } finally {
+      setSavingGuardrails(false);
+    }
+  }
+
+  function handleResetGuardrailConfig() {
+    setModalConfig({
+      isOpen: true,
+      title: 'Reset AI Guardrails to Defaults',
+      message: 'Restore default off-topic categories, official deadlines, and deanery disclaimer?',
+      confirmText: 'Reset to Defaults',
+      isDanger: true,
+      onConfirm: async () => {
+        setModalConfig((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const reset = await api.adminResetGuardrailConfig();
+          applyGuardrailForm(reset);
+          toast.success(`Restored default AI Guardrail policy v${reset.version}`);
+        } catch (err) {
+          toast.error('Failed to reset guardrails: ' + err.message);
+        }
+      },
+    });
+  }
+
+  // --- Assistant Conversation Logs actions (US25) ---
+  async function loadAssistantLogs(overrides = null) {
+    const params = {
+      group: overrides?.group ?? logGroupFilter,
+      period: overrides?.period ?? logPeriodFilter,
+      status: overrides?.status ?? logStatusFilter,
+      from: overrides?.from ?? logFromDate,
+      to: overrides?.to ?? logToDate,
+    };
+    try {
+      setLoadingLogs(true);
+      const data = await api.adminGetAssistantLogs(params);
+      setLogsData(data);
+    } catch (e) {
+      toast.error('Failed to load assistant logs: ' + e.message);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }
+
+  async function handleFlagAssistantAnswer(messageId, status, existingComment = '') {
+    const comment = (flagComments[messageId] ?? existingComment ?? '').trim();
+    try {
+      setFlaggingMsgId(messageId);
+      await api.adminFlagAssistantLog(messageId, { status, comment });
+      toast.success(
+        status === 'wrong'
+          ? 'Answer flagged as wrong and added to ML Review Queue'
+          : status === 'resolved'
+            ? 'Marked as resolved (done) in ML Review Queue'
+            : 'Answer marked as helpful and logged for ML team'
+      );
+      await loadAssistantLogs();
+    } catch (e) {
+      toast.error('Failed to update flag: ' + e.message);
+    } finally {
+      setFlaggingMsgId(null);
+    }
+  }
+
+  async function handleRemoveAssistantFlag(messageId) {
+    try {
+      setFlaggingMsgId(messageId);
+      await api.adminRemoveAssistantLogFlag(messageId);
+      setFlagComments((prev) => {
+        const next = { ...prev };
+        delete next[messageId];
+        return next;
+      });
+      toast.success('Flag removed from ML Review Queue');
+      await loadAssistantLogs();
+    } catch (e) {
+      toast.error('Failed to remove flag: ' + e.message);
+    } finally {
+      setFlaggingMsgId(null);
+    }
+  }
+
+  function handleResetLogFilters() {
+    setLogGroupFilter('all');
+    setLogPeriodFilter('all');
+    setLogStatusFilter('all');
+    setLogFromDate('');
+    setLogToDate('');
+    loadAssistantLogs({ group: 'all', period: 'all', status: 'all', from: '', to: '' });
+  }
+
+  function formatEnDateTime(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  function handlePurgeExpiredLogs() {
+    setModalConfig({
+      isOpen: true,
+      title: 'Run 1-Year Log Retention Cleanup',
+      message: 'Delete all assistant conversation logs older than 1 academic year (365 days)?',
+      confirmText: 'Run Cleanup',
+      isDanger: true,
+      onConfirm: async () => {
+        setModalConfig((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setPurgingLogs(true);
+          const res = await api.adminPurgeAssistantLogs();
+          toast.success(`Retention cleanup complete: ${res.deletedCount} expired message(s) deleted.`);
+          await loadAssistantLogs();
+        } catch (e) {
+          toast.error('Failed to run retention cleanup: ' + e.message);
+        } finally {
+          setPurgingLogs(false);
+        }
+      },
+    });
+  }
+
   function handleFileSelected(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -754,6 +978,18 @@ export default function AdminPage() {
               onClick={() => setActiveTab('recommendations')}
             >
               Recommendation Engine
+            </button>
+            <button
+              className={activeTab === 'guardrails' ? 'btn btn-primary' : 'btn'}
+              onClick={() => setActiveTab('guardrails')}
+            >
+              AI Guardrails
+            </button>
+            <button
+              className={activeTab === 'logs' ? 'btn btn-primary' : 'btn'}
+              onClick={() => setActiveTab('logs')}
+            >
+              Assistant Logs
             </button>
           </div>
         </div>
@@ -1340,6 +1576,749 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ================= TAB 5: AI GUARDRAILS POLICY (US24) ================= */}
+        {activeTab === 'guardrails' && (
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '1.25rem',
+                flexWrap: 'wrap',
+                gap: '0.8rem',
+                paddingBottom: '0.9rem',
+                borderBottom: '1px solid var(--line)',
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', color: '#002B49' }}>AI Guardrails &amp; Safety Policies</h3>
+                <p className="muted small" style={{ margin: '4px 0 0' }}>
+                  Configure blocked topics, sensitive-data redaction, official deadlines, and refusal responses live without redeployment.
+                </p>
+              </div>
+
+              {guardrailConfig && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span
+                    style={{
+                      backgroundColor: '#e6f4ea',
+                      color: '#00773c',
+                      border: '1px solid #b7e1c4',
+                      padding: '4px 10px',
+                      borderRadius: '999px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    Active Policy v{guardrailConfig.version}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-mini btn-danger"
+                    onClick={handleResetGuardrailConfig}
+                    style={{ padding: '5px 12px', fontSize: '12px' }}
+                  >
+                    Reset to Defaults
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {guardrailError && (
+              <div className="banner-error" style={{ margin: '0 0 1rem' }}>
+                ⚠ {guardrailError}
+              </div>
+            )}
+
+            {loadingGuardrails && !guardrailConfig ? (
+              <p className="muted">Loading AI guardrail configuration...</p>
+            ) : (
+              <form onSubmit={handleSaveGuardrailConfig} style={{ display: 'grid', gap: '1.2rem' }}>
+                {/* Card 1: Topic Filtering & Privacy */}
+                <section
+                  style={{
+                    backgroundColor: '#fff',
+                    border: '1px solid var(--line)',
+                    borderRadius: '8px',
+                    padding: '1.15rem 1.25rem',
+                  }}
+                >
+                  <div style={{ marginBottom: '0.9rem', paddingBottom: '0.6rem', borderBottom: '1px solid #e6ecf2' }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', color: '#002B49' }}>1. Topic Filtering &amp; Privacy</h4>
+                    <p className="muted small" style={{ margin: '2px 0 0' }}>
+                      Control which non-academic subjects are refused and how sensitive credentials are protected.
+                    </p>
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '8px', color: '#2c3e50' }}>
+                      Blocked Off-Topic Categories
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
+                      {[
+                        { id: 'politics', label: 'Politics & Elections', desc: 'Parties, voting, geopolitics' },
+                        { id: 'medical', label: 'Medical Advice', desc: 'Symptoms, diagnoses, drugs' },
+                        { id: 'legal', label: 'Legal Counsel', desc: 'Lawsuits, contracts, police' },
+                        { id: 'personal', label: 'Personal / Lifestyle', desc: 'Dating, horoscopes, betting' },
+                      ].map((cat) => {
+                        const checked = blockedCategories.includes(cat.id);
+                        return (
+                          <label
+                            key={cat.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '10px',
+                              padding: '10px 12px',
+                              border: `1px solid ${checked ? '#0070BA' : 'var(--line)'}`,
+                              borderRadius: '6px',
+                              backgroundColor: checked ? '#f0f7fd' : '#fafbfc',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleBlockedCategory(cat.id)}
+                              style={{ marginTop: '2px' }}
+                            />
+                            <div>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: '#002B49' }}>{cat.label}</div>
+                              <div className="small muted" style={{ fontSize: '11px' }}>{cat.desc}</div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', alignItems: 'start' }}>
+                    <div>
+                      <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '5px', color: '#2c3e50' }}>
+                        Custom Blocked Keywords
+                      </label>
+                      <input
+                        type="text"
+                        value={customKeywordsText}
+                        onChange={(e) => setCustomKeywordsText(e.target.value)}
+                        placeholder="Comma-separated, e.g.: crypto, gambling, visa broker"
+                        style={{ width: '100%' }}
+                      />
+                      {(() => {
+                        const chips = customKeywordsText
+                          .split(/[\n,]+/)
+                          .map((k) => k.trim())
+                          .filter(Boolean);
+                        if (chips.length === 0) return null;
+                        return (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                            {chips.map((kw, i) => (
+                              <span
+                                key={`${kw}-${i}`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  backgroundColor: '#eef3f8',
+                                  border: '1px solid #c9d4e0',
+                                  color: '#002B49',
+                                  borderRadius: '999px',
+                                  padding: '2px 9px',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {kw}
+                                <button
+                                  type="button"
+                                  aria-label={`Remove ${kw}`}
+                                  onClick={() => {
+                                    const next = chips.filter((_, idx) => idx !== i);
+                                    setCustomKeywordsText(next.join(', '));
+                                  }}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#6b7a8c',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    fontWeight: 700,
+                                    lineHeight: 1,
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '10px',
+                        padding: '10px 12px',
+                        marginTop: '20px',
+                        border: `1px solid ${redactSensitiveData ? '#b7e1c4' : 'var(--line)'}`,
+                        borderRadius: '6px',
+                        backgroundColor: redactSensitiveData ? '#f2fbf5' : '#fafbfc',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={redactSensitiveData}
+                        onChange={(e) => setRedactSensitiveData(e.target.checked)}
+                        style={{ marginTop: '3px' }}
+                      />
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#002B49' }}>
+                          Mask Sensitive Personal Data
+                        </div>
+                        <div className="small muted" style={{ fontSize: '11.5px', marginTop: '2px' }}>
+                          Automatically redact passwords, payment card numbers, CVVs &amp; API tokens before saving logs or replying.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </section>
+
+                {/* Card 2: Official Deadlines & Disclaimer */}
+                <section
+                  style={{
+                    backgroundColor: '#fff',
+                    border: '1px solid var(--line)',
+                    borderRadius: '8px',
+                    padding: '1.15rem 1.25rem',
+                  }}
+                >
+                  <div style={{ marginBottom: '0.9rem', paddingBottom: '0.6rem', borderBottom: '1px solid #e6ecf2' }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', color: '#002B49' }}>2. Official Deadlines &amp; Disclaimer</h4>
+                    <p className="muted small" style={{ margin: '2px 0 0' }}>
+                      Source-of-truth university deadlines returned by the assistant, with the required disclaimer appended automatically.
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      backgroundColor: '#f5f9ff',
+                      border: '1px solid #c6dafc',
+                      borderRadius: '6px',
+                      padding: '0.85rem 1rem',
+                      marginBottom: '1rem',
+                    }}
+                  >
+                    <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '5px', color: '#002B49' }}>
+                      Mandatory Disclaimer (appended to deadline &amp; official rule answers)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={disclaimerText}
+                      onChange={(e) => setDisclaimerText(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+                    <div>
+                      <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '5px', color: '#2c3e50' }}>
+                        Course Drop / Add-Drop Deadline
+                      </label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={dropDeadline}
+                        onChange={(e) => setDropDeadline(e.target.value)}
+                        style={{ width: '100%', resize: 'vertical', lineHeight: 1.45 }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '5px', color: '#2c3e50' }}>
+                        Registration Deadline
+                      </label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={regDeadline}
+                        onChange={(e) => setRegDeadline(e.target.value)}
+                        style={{ width: '100%', resize: 'vertical', lineHeight: 1.45 }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '5px', color: '#2c3e50' }}>
+                        Retake Policy Rule
+                      </label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={retakeRule}
+                        onChange={(e) => setRetakeRule(e.target.value)}
+                        style={{ width: '100%', resize: 'vertical', lineHeight: 1.45 }}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                {/* Card 3: Refusal Templates */}
+                <section
+                  style={{
+                    backgroundColor: '#fff',
+                    border: '1px solid var(--line)',
+                    borderRadius: '8px',
+                    padding: '1.15rem 1.25rem',
+                  }}
+                >
+                  <div style={{ marginBottom: '0.9rem', paddingBottom: '0.6rem', borderBottom: '1px solid #e6ecf2' }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', color: '#002B49' }}>3. Standard Refusal Messages</h4>
+                    <p className="muted small" style={{ margin: '2px 0 0' }}>
+                      Polite responses shown when a student asks an off-topic question.
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+                    <div>
+                      <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '5px', color: '#2c3e50' }}>
+                        English Template
+                      </label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={refusalEn}
+                        onChange={(e) => setRefusalEn(e.target.value)}
+                        style={{ width: '100%', resize: 'vertical', lineHeight: 1.45 }}
+                      />
+                    </div>
+                    <div>
+                      <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '5px', color: '#2c3e50' }}>
+                        Russian Template
+                      </label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={refusalRu}
+                        onChange={(e) => setRefusalRu(e.target.value)}
+                        style={{ width: '100%', resize: 'vertical', lineHeight: 1.45 }}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={savingGuardrails}
+                    style={{ padding: '9px 24px', fontSize: '14px', fontWeight: 600 }}
+                  >
+                    {savingGuardrails ? 'Saving Guardrails...' : `Publish Guardrails (v${(guardrailConfig?.version || 1) + 1})`}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* ================= TAB 6: ASSISTANT CONVERSATION LOGS (US25) ================= */}
+        {activeTab === 'logs' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.8rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', color: '#002B49' }}>AI Assistant Conversation Logs &amp; ML Review Queue</h3>
+                <p className="muted small" style={{ margin: '3px 0 0' }}>
+                  Browse anonymized student conversations, monitor refusal metrics, and flag inaccurate answers for the ML team.
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    backgroundColor: '#e8f0fe',
+                    color: '#002B49',
+                    border: '1px solid #c6dafc',
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                  }}
+                >
+                  Anonymized View Active
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-mini btn-danger"
+                  disabled={purgingLogs}
+                  onClick={handlePurgeExpiredLogs}
+                  style={{ padding: '4px 10px' }}
+                >
+                  {purgingLogs ? 'Cleaning...' : 'Run 1-Year Cleanup'}
+                </button>
+              </div>
+            </div>
+
+            {/* Metrics Dashboard */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div style={{ backgroundColor: '#fafbfc', border: '1px solid var(--line)', borderRadius: '8px', padding: '1rem' }}>
+                <div className="small muted">Conversations / Day</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: '#002B49', marginTop: '4px' }}>
+                  {logsData?.metrics?.conversationsPerDay ?? 0}
+                </div>
+                <div className="small muted" style={{ fontSize: '11px' }}>
+                  {logsData?.metrics?.totalConversations ?? 0} total in current filter
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: '#fafbfc', border: '1px solid var(--line)', borderRadius: '8px', padding: '1rem' }}>
+                <div className="small muted">Refusal Rate</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: '#0070BA', marginTop: '4px' }}>
+                  {logsData?.metrics?.refusalRate ?? 0}%
+                </div>
+                <div className="small muted" style={{ fontSize: '11px' }}>
+                  {logsData?.metrics?.refusalCount ?? 0} guardrail refusals
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: '#fafbfc', border: '1px solid var(--line)', borderRadius: '8px', padding: '1rem' }}>
+                <div className="small muted">Flagged Answers</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: '#D9381E', marginTop: '4px' }}>
+                  {logsData?.metrics?.flaggedCount ?? 0}
+                </div>
+                <div className="small muted" style={{ fontSize: '11px' }}>
+                  {logsData?.metrics?.wrongCount ?? 0} wrong · {logsData?.metrics?.helpfulCount ?? 0} helpful · {logsData?.metrics?.resolvedCount ?? 0} done
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: '#fafbfc', border: '1px solid var(--line)', borderRadius: '8px', padding: '1rem' }}>
+                <div className="small muted">Retention Policy</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: '#00A859', marginTop: '4px' }}>
+                  {logsData?.metrics?.retentionDays ?? 365}d
+                </div>
+                <div className="small muted" style={{ fontSize: '11px' }}>
+                  Auto-purged after 1 academic year
+                </div>
+              </div>
+            </div>
+
+            {/* Filters Bar */}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+                alignItems: 'flex-end',
+                backgroundColor: '#fafbfc',
+                border: '1px solid var(--line)',
+                borderRadius: '8px',
+                padding: '0.9rem 1rem',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <div>
+                <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Student Group</label>
+                <select
+                  value={logGroupFilter}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setLogGroupFilter(next);
+                    loadAssistantLogs({ group: next });
+                  }}
+                >
+                  <option value="all">All Groups</option>
+                  <option value="Unassigned">Unassigned</option>
+                  {(logsData?.availableGroups || []).map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Period</label>
+                <select
+                  value={logPeriodFilter}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setLogPeriodFilter(next);
+                    loadAssistantLogs({ period: next });
+                  }}
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="week">This Week</option>
+                  <option value="month">Last 30 Days</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Flag Status</label>
+                <select
+                  value={logStatusFilter}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setLogStatusFilter(next);
+                    loadAssistantLogs({ status: next });
+                  }}
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="flagged">Flagged Only</option>
+                  <option value="wrong">Flagged as Wrong</option>
+                  <option value="helpful">Marked Helpful</option>
+                  <option value="resolved">Resolved (Done)</option>
+                  <option value="unflagged">Unflagged</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>From Date</label>
+                <EnglishDatePicker
+                  value={logFromDate}
+                  placeholder="YYYY-MM-DD"
+                  onChange={(next) => {
+                    setLogFromDate(next);
+                    loadAssistantLogs({ from: next });
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="small" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>To Date</label>
+                <EnglishDatePicker
+                  value={logToDate}
+                  placeholder="YYYY-MM-DD"
+                  onChange={(next) => {
+                    setLogToDate(next);
+                    loadAssistantLogs({ to: next });
+                  }}
+                />
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => loadAssistantLogs()}
+                disabled={loadingLogs}
+                style={{ padding: '6px 14px' }}
+              >
+                {loadingLogs ? 'Loading...' : 'Apply Filters'}
+              </button>
+
+              <button
+                type="button"
+                className="btn"
+                onClick={handleResetLogFilters}
+                disabled={loadingLogs}
+                style={{ padding: '6px 12px' }}
+              >
+                Reset
+              </button>
+            </div>
+
+            {/* Conversation Logs List */}
+            {loadingLogs && !logsData ? (
+              <p className="muted">Loading anonymized conversation logs...</p>
+            ) : (logsData?.logs || []).length === 0 ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center', border: '1px dashed var(--line)', borderRadius: '8px', marginBottom: '1.5rem' }}>
+                <p className="muted" style={{ margin: 0 }}>No assistant conversations match the selected filters.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: '0.9rem', marginBottom: '1.75rem' }}>
+                {(logsData?.logs || []).map((entry) => {
+                  const commentVal = flagComments[entry.messageId] ?? entry.mlComment ?? '';
+                  return (
+                    <div
+                      key={entry.messageId}
+                      style={{
+                        border: '1px solid var(--line)',
+                        borderLeft:
+                          entry.flagStatus === 'wrong'
+                            ? '4px solid #D9381E'
+                            : entry.flagStatus === 'helpful'
+                              ? '4px solid #00A859'
+                              : entry.flagStatus === 'resolved'
+                                ? '4px solid #64748b'
+                                : '4px solid #0070BA',
+                        borderRadius: '8px',
+                        padding: '1rem',
+                        backgroundColor: '#fff',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <strong style={{ color: '#002B49' }}>{entry.anonymousStudentId}</strong>
+                          <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '999px', backgroundColor: '#eef3f8', color: '#002B49', fontWeight: 600 }}>
+                            Group: {entry.group}
+                          </span>
+                          {entry.wasRefusal && (
+                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', backgroundColor: '#fef3c7', color: '#92400e', fontWeight: 700 }}>
+                              Guardrail Refusal
+                            </span>
+                          )}
+                          {entry.flagStatus === 'wrong' && (
+                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', backgroundColor: '#fde8e8', color: '#D9381E', fontWeight: 700 }}>
+                              Flagged: Wrong
+                            </span>
+                          )}
+                          {entry.flagStatus === 'helpful' && (
+                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', backgroundColor: '#e6f4ea', color: '#00A859', fontWeight: 700 }}>
+                              Flagged: Helpful
+                            </span>
+                          )}
+                          {entry.flagStatus === 'resolved' && (
+                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', backgroundColor: '#e2e8f0', color: '#334155', fontWeight: 700 }}>
+                              Resolved ✓
+                            </span>
+                          )}
+                        </div>
+                        <span className="small muted">{formatEnDateTime(entry.createdAt)}</span>
+                      </div>
+
+                      <div style={{ marginBottom: '0.5rem', fontSize: '13px' }}>
+                        <strong style={{ color: '#0070BA' }}>Student Prompt:</strong> {entry.question}
+                      </div>
+                      <div style={{ marginBottom: '0.8rem', fontSize: '13px', whiteSpace: 'pre-wrap', backgroundColor: '#f8fafc', padding: '0.65rem', borderRadius: '6px', border: '1px solid #e5e7eb', overflowWrap: 'anywhere' }}>
+                        <strong style={{ color: '#002B49' }}>Assistant Answer:</strong>{'\n'}{entry.answer}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input
+                          type="text"
+                          placeholder="Add comment for ML review team..."
+                          value={commentVal}
+                          onChange={(e) =>
+                            setFlagComments((prev) => ({ ...prev, [entry.messageId]: e.target.value }))
+                          }
+                          style={{ flex: '1 1 240px', minWidth: '200px' }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-mini btn-danger"
+                          disabled={flaggingMsgId === entry.messageId}
+                          onClick={() => handleFlagAssistantAnswer(entry.messageId, 'wrong', entry.mlComment)}
+                          style={{ padding: '6px 12px', fontWeight: 600 }}
+                        >
+                          {entry.flagStatus === 'wrong' ? 'Flagged Wrong ✓' : 'Flag as Wrong'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-mini btn-success"
+                          disabled={flaggingMsgId === entry.messageId}
+                          onClick={() => handleFlagAssistantAnswer(entry.messageId, 'helpful', entry.mlComment)}
+                          style={{ padding: '6px 12px', fontWeight: 600 }}
+                        >
+                          {entry.flagStatus === 'helpful' ? 'Helpful ✓' : 'Helpful'}
+                        </button>
+                        {entry.flagStatus && (
+                          <button
+                            type="button"
+                            className="btn btn-mini"
+                            disabled={flaggingMsgId === entry.messageId}
+                            onClick={() => handleRemoveAssistantFlag(entry.messageId)}
+                            style={{ padding: '6px 10px', fontWeight: 600 }}
+                          >
+                            Clear Flag
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ML Review Queue */}
+            <div style={{ borderTop: '2px solid var(--line)', paddingTop: '1.25rem' }}>
+              <h4 style={{ margin: '0 0 0.4rem 0', color: '#002B49' }}>
+                ML Review Queue ({(logsData?.mlReviewQueue || []).length})
+              </h4>
+              <p className="muted small" style={{ margin: '0 0 0.9rem 0' }}>
+                Flagged assistant answers queued with administrator comments for ML quality review.
+              </p>
+
+              {(logsData?.mlReviewQueue || []).length === 0 ? (
+                <p className="muted small">No answers have been flagged yet.</p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th style={{ textTransform: 'none' }}>Student (Anon)</th>
+                        <th style={{ textTransform: 'none' }}>Group</th>
+                        <th style={{ textTransform: 'none' }}>Status</th>
+                        <th style={{ textTransform: 'none' }}>ML Team Comment</th>
+                        <th style={{ textTransform: 'none' }}>Prompt Snippet</th>
+                        <th style={{ textTransform: 'none' }}>Reviewed</th>
+                        <th style={{ textTransform: 'none' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(logsData?.mlReviewQueue || []).map((q) => (
+                        <tr key={q.messageId} style={{ opacity: q.flagStatus === 'resolved' ? 0.72 : 1 }}>
+                          <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{q.anonymousStudentId}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}>{q.group}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                color:
+                                  q.flagStatus === 'wrong'
+                                    ? '#D9381E'
+                                    : q.flagStatus === 'helpful'
+                                      ? '#00A859'
+                                      : '#475569',
+                              }}
+                            >
+                              {q.flagStatus === 'wrong'
+                                ? 'Wrong'
+                                : q.flagStatus === 'helpful'
+                                  ? 'Helpful'
+                                  : 'Resolved ✓'}
+                            </span>
+                          </td>
+                          <td>{q.mlComment || '—'}</td>
+                          <td className="small muted">
+                            {q.question.length > 70 ? `${q.question.slice(0, 70)}...` : q.question}
+                          </td>
+                          <td className="small muted" style={{ whiteSpace: 'nowrap' }}>
+                            {formatEnDateTime(q.reviewedAt || q.createdAt)}
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                              {q.flagStatus !== 'resolved' && (
+                                <button
+                                  type="button"
+                                  className="btn btn-mini btn-success"
+                                  disabled={flaggingMsgId === q.messageId}
+                                  onClick={() => handleFlagAssistantAnswer(q.messageId, 'resolved', q.mlComment)}
+                                  style={{ padding: '4px 8px', fontWeight: 600 }}
+                                >
+                                  Mark Done
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="btn btn-mini btn-danger"
+                                disabled={flaggingMsgId === q.messageId}
+                                onClick={() => handleRemoveAssistantFlag(q.messageId)}
+                                style={{ padding: '4px 8px', fontWeight: 600 }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
