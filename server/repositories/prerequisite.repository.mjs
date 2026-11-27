@@ -30,13 +30,24 @@ export class PrerequisiteRepository {
       return prereqCache;
     }
     try {
-      const res = await pool.query('SELECT course_code, prereq_course_code, min_grade, type FROM prerequisites');
-      const dbRules = res.rows;
+      let dbRules = [];
+      try {
+        const res = await pool.query(
+          'SELECT course_code, prereq_code AS prereq_course_code, min_grade, type FROM prerequisites'
+        );
+        dbRules = res.rows;
+      } catch {
+        const res = await pool.query(
+          'SELECT course_code, prereq_course_code, min_grade, type FROM prerequisites'
+        );
+        dbRules = res.rows;
+      }
       const map = new Map();
       for (const r of DEFAULT_PREREQUISITES) {
         map.set(`${r.course_code.toUpperCase()}:${r.prereq_course_code.toUpperCase()}`, r);
       }
       for (const r of dbRules) {
+        if (!r.course_code || !r.prereq_course_code) continue;
         map.set(`${r.course_code.toUpperCase()}:${r.prereq_course_code.toUpperCase()}`, r);
       }
       prereqCache = Array.from(map.values());
@@ -59,20 +70,35 @@ export class PrerequisiteRepository {
   }
 
   async addPrerequisite(courseCode, prereqCourseCode, minGrade = 'D', type = 'prerequisite') {
-    const q = `
-      INSERT INTO prerequisites (course_code, prereq_course_code, min_grade, type)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (course_code, prereq_course_code)
-      DO UPDATE SET min_grade = EXCLUDED.min_grade, type = EXCLUDED.type
-      RETURNING *
-    `;
-    const res = await pool.query(q, [
+    const params = [
       courseCode.toUpperCase().trim(),
       prereqCourseCode.toUpperCase().trim(),
       minGrade.toUpperCase().trim(),
       type.toLowerCase().trim(),
-    ]);
-    return res.rows[0];
+    ];
+    try {
+      const res = await pool.query(
+        `INSERT INTO prerequisites (course_code, prereq_code, min_grade, type)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (course_code, prereq_code)
+         DO UPDATE SET min_grade = EXCLUDED.min_grade, type = EXCLUDED.type
+         RETURNING id, course_code, prereq_code AS prereq_course_code, min_grade, type, created_at`,
+        params
+      );
+      this.clearCache();
+      return res.rows[0];
+    } catch {
+      const res = await pool.query(
+        `INSERT INTO prerequisites (course_code, prereq_course_code, min_grade, type)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (course_code, prereq_course_code)
+         DO UPDATE SET min_grade = EXCLUDED.min_grade, type = EXCLUDED.type
+         RETURNING *`,
+        params
+      );
+      this.clearCache();
+      return res.rows[0];
+    }
   }
 }
 

@@ -136,4 +136,56 @@ describe('API Integration & Validation Tests', () => {
       { code: 'CSS 375', name: '' },
     ]);
   }, 15000);
+
+  it('preserves PostgreSQL session across requests even after a SQL error or prerequisite/catalog lookup', async () => {
+    const { initDb, pool } = await import('../server/db.mjs');
+    const { curriculumRepository } = await import('../server/repositories/curriculum.repository.mjs');
+    const { prerequisiteRepository } = await import('../server/repositories/prerequisite.repository.mjs');
+
+    await initDb();
+    const testUser = 'test_session_resilience_user';
+    const testSessionId = 'test_session_resilience_token_64chars_00000000000000000000000000';
+
+    try {
+      const { rows: uRows } = await pool.query(
+        `INSERT INTO users (username, display_name, role)
+         VALUES ($1, 'Session Resilience User', 'Student')
+         ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name
+         RETURNING id, username`,
+        [testUser]
+      );
+      await pool.query(
+        `INSERT INTO sessions (id, user_id, username, role, status, expires_at)
+         VALUES ($1, $2, $3, 'Student', 'authed', NOW() + INTERVAL '1 day')
+         ON CONFLICT (id) DO NOTHING`,
+        [testSessionId, uRows[0].id, testUser]
+      );
+
+      const cookie = `zeme_session=${testSessionId}`;
+
+      // 1st authenticated request succeeds
+      const firstRes = await request(app).get('/api/profile').set('Cookie', cookie);
+      expect(firstRes.status).toBe(200);
+      expect(firstRes.body.username).toBe(testUser);
+
+      // Trigger catalog & prerequisite queries + an intentional invalid SQL query
+      curriculumRepository.clearCatalogCache();
+      prerequisiteRepository.clearCache();
+      await curriculumRepository.getCatalogCourses();
+      await prerequisiteRepository.getAllPrerequisites();
+      await pool.query('SELECT nonexistent_column_xyz FROM users').catch(() => {});
+
+      // 2nd and 3rd authenticated requests MUST still find the session in PostgreSQL (no switch to empty in-memory store!)
+      const secondRes = await request(app).get('/api/profile').set('Cookie', cookie);
+      expect(secondRes.status).toBe(200);
+      expect(secondRes.body.username).toBe(testUser);
+
+      const chatRes = await request(app).get('/api/chat/messages').set('Cookie', cookie);
+      expect(chatRes.status).toBe(200);
+      expect(Array.isArray(chatRes.body.messages)).toBe(true);
+    } finally {
+      await pool.query('DELETE FROM sessions WHERE id = $1', [testSessionId]).catch(() => {});
+      await pool.query('DELETE FROM users WHERE username = $1', [testUser]).catch(() => {});
+    }
+  }, 20000);
 });

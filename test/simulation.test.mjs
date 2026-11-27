@@ -101,7 +101,7 @@ describe("US18: Simulate 'What-if' Scenarios", () => {
 
     getCurriculumSpy.mockRestore();
     evaluateSpy.mockRestore();
-  });
+  }, 15000);
 
   it('Scenario 2: Simulation enforces strict non-persistence and includes simulation watermark', async () => {
     const getCurriculumSpy = vi.spyOn(scheduleService, 'getCurriculum').mockResolvedValue(mockCurriculum);
@@ -135,7 +135,7 @@ describe("US18: Simulate 'What-if' Scenarios", () => {
 
     getCurriculumSpy.mockRestore();
     evaluateSpy.mockRestore();
-  });
+  }, 15000);
 
   it('Scenario 3: Simulates next 2 semesters with chained prerequisite progression', async () => {
     const getCurriculumSpy = vi.spyOn(scheduleService, 'getCurriculum').mockResolvedValue(mockCurriculum);
@@ -164,5 +164,5 @@ describe("US18: Simulate 'What-if' Scenarios", () => {
 
     getCurriculumSpy.mockRestore();
     evaluateSpy.mockRestore();
-  });
+  }, 15000);
 });

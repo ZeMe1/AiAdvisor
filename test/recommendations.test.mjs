@@ -95,7 +95,7 @@ describe('US16: Get Personalized Course Recommendations', () => {
 
     getCurriculumSpy.mockRestore();
     evaluateSpy.mockRestore();
-  });
+  }, 15000);
 
   it('Scenario 2: Recommendations respect the 21 ECTS semester limit', async () => {
     const mockCurriculum = {

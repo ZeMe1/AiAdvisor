@@ -1,7 +1,19 @@
 import { pool } from '../db.mjs';
 
+let catalogCache = null;
+let catalogCacheExpiry = 0;
+const CATALOG_CACHE_TTL_MS = 60000;
+
 export class CurriculumRepository {
+  clearCatalogCache() {
+    catalogCache = null;
+    catalogCacheExpiry = 0;
+  }
+
   async getCatalogCourses() {
+    if (catalogCache && Date.now() < catalogCacheExpiry) {
+      return catalogCache;
+    }
     let res;
     try {
       res = await pool.query(`
@@ -9,15 +21,15 @@ export class CurriculumRepository {
         UNION
         SELECT course_code AS code, course_code AS name, 5 AS ects, NULL AS description FROM prerequisites
         UNION
-        SELECT prereq_course_code AS code, prereq_course_code AS name, 5 AS ects, NULL AS description FROM prerequisites
+        SELECT prereq_code AS code, prereq_code AS name, 5 AS ects, NULL AS description FROM prerequisites
       `);
     } catch {
       res = await pool.query(`
-        SELECT code, name, ects FROM course_catalog
+        SELECT code, name, ects, description FROM course_catalog
         UNION
-        SELECT course_code AS code, course_code AS name, 5 AS ects FROM prerequisites
+        SELECT course_code AS code, course_code AS name, 5 AS ects, NULL AS description FROM prerequisites
         UNION
-        SELECT prereq_code AS code, prereq_code AS name, 5 AS ects FROM prerequisites
+        SELECT prereq_course_code AS code, prereq_course_code AS name, 5 AS ects, NULL AS description FROM prerequisites
       `);
     }
     const map = new Map();
@@ -30,19 +42,32 @@ export class CurriculumRepository {
         }
       }
     }
+    catalogCache = map;
+    catalogCacheExpiry = Date.now() + CATALOG_CACHE_TTL_MS;
     return map;
   }
 
   async isCourseInCatalog(code) {
     if (!code) return false;
     const cleanCode = code.toUpperCase().trim();
-    const res = await pool.query(
-      `SELECT 1 FROM course_catalog WHERE UPPER(code) = $1
-       UNION
-       SELECT 1 FROM prerequisites WHERE UPPER(course_code) = $1 OR UPPER(prereq_course_code) = $1
-       LIMIT 1`,
-      [cleanCode]
-    );
+    let res;
+    try {
+      res = await pool.query(
+        `SELECT 1 FROM course_catalog WHERE UPPER(code) = $1
+         UNION
+         SELECT 1 FROM prerequisites WHERE UPPER(course_code) = $1 OR UPPER(prereq_code) = $1
+         LIMIT 1`,
+        [cleanCode]
+      );
+    } catch {
+      res = await pool.query(
+        `SELECT 1 FROM course_catalog WHERE UPPER(code) = $1
+         UNION
+         SELECT 1 FROM prerequisites WHERE UPPER(course_code) = $1 OR UPPER(prereq_course_code) = $1
+         LIMIT 1`,
+        [cleanCode]
+      );
+    }
     return res.rowCount > 0;
   }
 
@@ -63,6 +88,7 @@ export class CurriculumRepository {
         [cleanCode, name || cleanCode, ects]
       );
     }
+    this.clearCatalogCache();
   }
 
   async createCurriculum({ program, academic_year, version_title, is_published = false }) {

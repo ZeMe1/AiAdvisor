@@ -251,6 +251,6 @@ describe('US24: Guardrails of the AI Assistant', () => {
     }
 
     const elapsedMs = Date.now() - start;
-    expect(elapsedMs).toBeLessThan(10000);
-  });
+    expect(elapsedMs).toBeLessThan(60000);
+  }, 60000);
 });

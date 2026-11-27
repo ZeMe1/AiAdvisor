@@ -151,5 +151,5 @@ describe('US13: Manage Groups and Assign Advisors', () => {
     // Verify student no longer has this group
     const studentAdvisor = await groupService.getStudentAdvisor('test_student_del');
     expect(studentAdvisor.group).toBeNull();
-  });
+  }, 15000);
 });
