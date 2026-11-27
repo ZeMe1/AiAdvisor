@@ -14,6 +14,7 @@ import scheduleRoutes from './routes/schedule.routes.mjs';
 import userRoutes from './routes/user.routes.mjs';
 import adminRoutes from './routes/admin.routes.mjs';
 import chatRoutes from './routes/chat.routes.mjs';
+import messagesRoutes from './routes/messages.routes.mjs';
 import { assistantLogsService } from './services/assistant-logs.service.mjs';
 
 // Инициализация структуры БД + очистка логов старше 1 академического года (US25)
@@ -43,6 +44,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api', scheduleRoutes);
 app.use('/api', userRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/messages', messagesRoutes);
 
 // ------------------------------------------------- Статика фронтенда
 const webDist = path.resolve('web/dist');

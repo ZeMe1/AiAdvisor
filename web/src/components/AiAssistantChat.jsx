@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuthStore } from '../stores/authStore.js';
+import { useMessagesStore } from '../stores/messagesStore.js';
 import EligibilityBadge from '../shared/ui/EligibilityBadge.jsx';
 
 const QUICK_PROMPTS = [
@@ -93,6 +94,16 @@ export default function AiAssistantChat() {
   const currentUsername = profile?.username || me?.user?.username || me?.username;
 
   const [isOpen, setIsOpen] = useState(false);
+  const unreadAssistant = useMessagesStore((s) => s.unreadAssistant);
+  const clearAssistantUnread = useMessagesStore((s) => s.clearAssistantUnread);
+  const isOpenRef = useRef(isOpen);
+
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+    if (isOpen) {
+      clearAssistantUnread();
+    }
+  }, [isOpen, clearAssistantUnread]);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -204,6 +215,13 @@ export default function AiAssistantChat() {
           res.userMessage || optimisticUserMsg,
           res.assistantMessage,
         ]);
+        if (!isOpenRef.current && typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('zeme:assistant-reply', {
+              detail: { content: res.assistantMessage.content },
+            })
+          );
+        }
       }
       setIsTyping(false);
     } catch (err) {
@@ -342,6 +360,21 @@ export default function AiAssistantChat() {
           <SparkleIcon size={17} />
         </span>
         <span className="ai-chat-btn-text">{isOpen ? 'Close Chat' : 'AI Assistant'}</span>
+        {!isOpen && unreadAssistant > 0 && (
+          <span
+            style={{
+              backgroundColor: '#D9381E',
+              color: '#FFFFFF',
+              borderRadius: '999px',
+              padding: '1px 7px',
+              fontSize: '11px',
+              fontWeight: 700,
+              marginLeft: '4px',
+            }}
+          >
+            {unreadAssistant > 99 ? '99+' : unreadAssistant}
+          </span>
+        )}
       </button>
 
       {/* Chat Window */}

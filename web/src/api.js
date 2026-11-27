@@ -85,4 +85,26 @@ export const api = {
   addChatCourseToPlan: (courseCode, targetSemester) => j('/api/chat/plan/add', post({ courseCode, targetSemester })),
   removeChatCourseFromPlan: (courseCode, targetSemester) => j('/api/chat/plan/remove', post({ courseCode, targetSemester })),
   clearChatMessages: () => j('/api/chat/messages', { method: 'DELETE' }),
+  syncMessages: (since) =>
+    j(`/api/messages/sync${since ? `?since=${encodeURIComponent(since)}` : ''}`),
+  getMyPresence: () => j('/api/messages/presence/me'),
+  updateOfficeHours: (body) =>
+    j('/api/messages/presence/office-hours', { method: 'PUT', body: JSON.stringify(body) }),
+  getAdvisorPresence: (advisor) =>
+    j(`/api/messages/presence/advisor${advisor ? `?advisor=${encodeURIComponent(advisor)}` : ''}`),
+  getStudentDialog: (advisor) =>
+    j(`/api/messages/student/dialog${advisor ? `?advisor=${encodeURIComponent(advisor)}` : ''}`),
+  sendStudentMessage: (body) => j('/api/messages/student/dialog', post(body)),
+  getStudentAnnouncements: () => j('/api/messages/student/announcements'),
+  markStudentAnnouncementsRead: () =>
+    j('/api/messages/student/announcements/read', { method: 'POST' }),
+  getAdvisorInbox: () => j('/api/messages/advisor/inbox'),
+  getAdvisorThread: (studentUsername) =>
+    j(`/api/messages/advisor/threads/${encodeURIComponent(studentUsername)}`),
+  sendAdvisorMessage: (studentUsername, content) =>
+    j(`/api/messages/advisor/threads/${encodeURIComponent(studentUsername)}`, post({ content })),
+  getAdvisorGroupAnnouncements: (groupId) =>
+    j(`/api/messages/advisor/groups/${encodeURIComponent(groupId)}/announcements`),
+  sendAdvisorGroupAnnouncement: (groupId, content) =>
+    j(`/api/messages/advisor/groups/${encodeURIComponent(groupId)}/announcements`, post({ content })),
 };

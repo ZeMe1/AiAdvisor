@@ -14,6 +14,7 @@ import AdminPage from './pages/AdminPage.jsx';
 import RoadmapPage from './pages/RoadmapPage.jsx';
 import RecommendationsPage from './pages/RecommendationsPage.jsx';
 import SimulationPage from './pages/SimulationPage.jsx';
+import MessagesPage from './pages/MessagesPage.jsx';
 import AiAssistantChat from './components/AiAssistantChat.jsx';
 
 export default function App() {
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/courses/:code" element={<CoursePage />} />
             <Route path="/electives/:code" element={<ElectivesPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/messages" element={<MessagesPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

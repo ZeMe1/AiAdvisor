@@ -102,7 +102,11 @@ const memTables = {
   ai_guardrail_configs: [],
   student_semester_plans: [],
   ai_chat_messages: [],
-  ai_chat_log_reviews: []
+  ai_chat_log_reviews: [],
+  user_presence: new Map(),
+  advisor_messages: [],
+  group_announcements: [],
+  group_announcement_reads: [],
 };
 
 let nextUserId = memTables.users.length + 1;
@@ -113,6 +117,8 @@ let nextLogReviewId = 1;
 let nextMemberId = 1;
 let nextPlanId = 1;
 let nextFeedbackId = 1;
+let nextAdvisorMsgId = 1;
+let nextAnnouncementId = 1;
 
 function handleMemQuery(sql, params = []) {
   const norm = sql.trim().replace(/\s+/g, ' ');
@@ -874,6 +880,262 @@ function handleMemQuery(sql, params = []) {
     return { rows: removed, rowCount: removed.length };
   }
 
+  // --- USER PRESENCE & OFFICE HOURS (US30) ---
+  if (upper.startsWith('INSERT INTO USER_PRESENCE')) {
+    const username = String(params[0] || '');
+    const key = username.toLowerCase();
+    const prev = memTables.user_presence.get(key) || {
+      username,
+      last_seen_at: new Date().toISOString(),
+      is_online: true,
+      office_hours: '',
+      response_time_note: '',
+      updated_at: new Date().toISOString(),
+    };
+    const nowIso = new Date().toISOString();
+
+    if (upper.includes('OFFICE_HOURS = $2')) {
+      const updated = {
+        ...prev,
+        username,
+        office_hours: params[1] ?? '',
+        response_time_note: params[2] ?? '',
+        updated_at: nowIso,
+      };
+      memTables.user_presence.set(key, updated);
+      return { rows: [updated], rowCount: 1 };
+    }
+
+    if (upper.includes('IS_ONLINE = FALSE')) {
+      const customSeen = params[1] ? new Date(params[1]).toISOString() : prev.last_seen_at || nowIso;
+      const updated = {
+        ...prev,
+        username,
+        last_seen_at: customSeen,
+        is_online: false,
+        updated_at: nowIso,
+      };
+      memTables.user_presence.set(key, updated);
+      return { rows: [updated], rowCount: 1 };
+    }
+
+    const isOnline = params[1] !== undefined ? Boolean(params[1]) : true;
+    const customSeen = params[2] ? new Date(params[2]).toISOString() : nowIso;
+    const updated = {
+      ...prev,
+      username,
+      last_seen_at: customSeen,
+      is_online: isOnline,
+      updated_at: nowIso,
+    };
+    memTables.user_presence.set(key, updated);
+    return { rows: [updated], rowCount: 1 };
+  }
+
+  if (upper.startsWith('SELECT') && upper.includes('FROM USER_PRESENCE WHERE USERNAME = $1')) {
+    const row = memTables.user_presence.get(String(params[0] || '').toLowerCase());
+    return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
+  }
+
+  if (upper.startsWith('DELETE FROM USER_PRESENCE')) {
+    if (params[0]) {
+      memTables.user_presence.delete(String(params[0]).toLowerCase());
+    } else if (upper.includes('LIKE')) {
+      for (const k of memTables.user_presence.keys()) {
+        if (k.startsWith('test_')) memTables.user_presence.delete(k);
+      }
+    }
+    return { rows: [], rowCount: 1 };
+  }
+
+  // --- ADVISOR DIRECT MESSAGES (US26, US27, US28) ---
+  if (upper.startsWith('INSERT INTO ADVISOR_MESSAGES')) {
+    const [student_username, advisor_username, group_id, sender_username, content, createdAtRaw] = params;
+    const created_at = createdAtRaw ? new Date(createdAtRaw).toISOString() : new Date().toISOString();
+    const row = {
+      id: nextAdvisorMsgId++,
+      student_username: String(student_username),
+      advisor_username: String(advisor_username),
+      group_id: group_id != null ? Number(group_id) : null,
+      sender_username: String(sender_username),
+      content: String(content),
+      is_read: false,
+      read_at: null,
+      created_at,
+    };
+    memTables.advisor_messages.push(row);
+    return { rows: [row], rowCount: 1 };
+  }
+
+  if (upper.startsWith('UPDATE ADVISOR_MESSAGES SET IS_READ = TRUE')) {
+    const [studentU, advisorU, readerU] = params.map((x) => String(x || '').toLowerCase());
+    const nowIso = new Date().toISOString();
+    const updated = [];
+    for (const m of memTables.advisor_messages) {
+      if (
+        m.student_username.toLowerCase() === studentU &&
+        m.advisor_username.toLowerCase() === advisorU &&
+        m.sender_username.toLowerCase() !== readerU &&
+        !m.is_read
+      ) {
+        m.is_read = true;
+        m.read_at = nowIso;
+        updated.push({ id: m.id });
+      }
+    }
+    return { rows: updated, rowCount: updated.length };
+  }
+
+  if (upper.startsWith('SELECT') && upper.includes('FROM ADVISOR_MESSAGES')) {
+    if (upper.includes('WHERE STUDENT_USERNAME = $1 AND ADVISOR_USERNAME = $2')) {
+      const sU = String(params[0] || '').toLowerCase();
+      const aU = String(params[1] || '').toLowerCase();
+      const limit = Number(params[2]) || 200;
+      const rows = memTables.advisor_messages
+        .filter((m) => m.student_username.toLowerCase() === sU && m.advisor_username.toLowerCase() === aU)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() || a.id - b.id)
+        .slice(-limit);
+      return { rows, rowCount: rows.length };
+    }
+
+    if (upper.includes('WHERE ADVISOR_USERNAME = $1 AND SENDER_USERNAME != $1 AND IS_READ = FALSE')) {
+      const aU = String(params[0] || '').toLowerCase();
+      const rows = memTables.advisor_messages
+        .filter((m) => m.advisor_username.toLowerCase() === aU && m.sender_username.toLowerCase() !== aU && !m.is_read)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || b.id - a.id);
+      return { rows, rowCount: rows.length };
+    }
+
+    if (upper.includes('WHERE STUDENT_USERNAME = $1 AND SENDER_USERNAME != $1 AND IS_READ = FALSE')) {
+      const sU = String(params[0] || '').toLowerCase();
+      const rows = memTables.advisor_messages
+        .filter((m) => m.student_username.toLowerCase() === sU && m.sender_username.toLowerCase() !== sU && !m.is_read)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || b.id - a.id);
+      return { rows, rowCount: rows.length };
+    }
+
+    if (upper.includes('WHERE ADVISOR_USERNAME = $1')) {
+      const aU = String(params[0] || '').toLowerCase();
+      const rows = memTables.advisor_messages
+        .filter((m) => m.advisor_username.toLowerCase() === aU)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() || a.id - b.id);
+      return { rows, rowCount: rows.length };
+    }
+  }
+
+  if (upper.startsWith('DELETE FROM ADVISOR_MESSAGES')) {
+    if (upper.includes('LIKE')) {
+      memTables.advisor_messages = memTables.advisor_messages.filter(
+        (m) =>
+          !m.student_username.toLowerCase().startsWith('test_') &&
+          !m.advisor_username.toLowerCase().startsWith('test_')
+      );
+    } else if (params[0]) {
+      const u = String(params[0]).toLowerCase();
+      memTables.advisor_messages = memTables.advisor_messages.filter(
+        (m) => m.student_username.toLowerCase() !== u && m.advisor_username.toLowerCase() !== u
+      );
+    }
+    return { rows: [], rowCount: 1 };
+  }
+
+  // --- GROUP ANNOUNCEMENTS & READS (US29) ---
+  if (upper.startsWith('INSERT INTO GROUP_ANNOUNCEMENTS')) {
+    const [groupIdRaw, advisorUsername, content, recipientsRaw, createdAtRaw] = params;
+    let recipient_usernames = [];
+    if (typeof recipientsRaw === 'string') {
+      try { recipient_usernames = JSON.parse(recipientsRaw); } catch { recipient_usernames = []; }
+    } else if (Array.isArray(recipientsRaw)) {
+      recipient_usernames = recipientsRaw;
+    }
+    const row = {
+      id: nextAnnouncementId++,
+      group_id: Number(groupIdRaw),
+      advisor_username: String(advisorUsername),
+      content: String(content),
+      recipient_usernames,
+      created_at: createdAtRaw ? new Date(createdAtRaw).toISOString() : new Date().toISOString(),
+    };
+    memTables.group_announcements.push(row);
+    return { rows: [row], rowCount: 1 };
+  }
+
+  if (upper.startsWith('SELECT') && upper.includes('FROM GROUP_ANNOUNCEMENTS WHERE GROUP_ID = $1')) {
+    const gid = Number(params[0]);
+    const limit = Number(params[1]) || 100;
+    const rows = memTables.group_announcements
+      .filter((a) => Number(a.group_id) === gid)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || b.id - a.id)
+      .slice(0, limit);
+    return { rows, rowCount: rows.length };
+  }
+
+  if (upper.startsWith('INSERT INTO GROUP_ANNOUNCEMENT_READS')) {
+    const announcement_id = Number(params[0]);
+    const student_username = String(params[1]);
+    const exists = memTables.group_announcement_reads.some(
+      (r) => Number(r.announcement_id) === announcement_id && r.student_username.toLowerCase() === student_username.toLowerCase()
+    );
+    if (!exists) {
+      const row = { announcement_id, student_username, read_at: new Date().toISOString() };
+      memTables.group_announcement_reads.push(row);
+      return { rows: [row], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
+  }
+
+  if (upper.startsWith('SELECT') && upper.includes('FROM GROUP_ANNOUNCEMENT_READS')) {
+    const ids = new Set((Array.isArray(params[0]) ? params[0] : []).map(Number));
+    const rows = memTables.group_announcement_reads.filter((r) => ids.has(Number(r.announcement_id)));
+    return { rows, rowCount: rows.length };
+  }
+
+  if (upper.startsWith('DELETE FROM GROUP_ANNOUNCEMENTS') || upper.startsWith('DELETE FROM GROUP_ANNOUNCEMENT_READS')) {
+    if (upper.includes('GROUP_ANNOUNCEMENTS') && upper.includes('LIKE')) {
+      const removedIds = new Set(
+        memTables.group_announcements
+          .filter((a) => a.advisor_username.toLowerCase().startsWith('test_'))
+          .map((a) => a.id)
+      );
+      memTables.group_announcements = memTables.group_announcements.filter((a) => !removedIds.has(a.id));
+      memTables.group_announcement_reads = memTables.group_announcement_reads.filter(
+        (r) => !removedIds.has(Number(r.announcement_id))
+      );
+    }
+    return { rows: [], rowCount: 1 };
+  }
+
+  // --- BATCH SNAPSHOT HELPERS FOR US27 ---
+  if (upper.startsWith('SELECT') && upper.includes('FROM STUDENT_DATA_CACHE WHERE USERNAME = ANY')) {
+    const set = new Set((Array.isArray(params[0]) ? params[0] : []).map((u) => String(u).toLowerCase()));
+    const rows = [];
+    for (const [k, v] of memTables.student_data_cache.entries()) {
+      if (set.has(k)) rows.push(v);
+    }
+    return { rows, rowCount: rows.length };
+  }
+
+  if (upper.startsWith('SELECT') && upper.includes('FROM STUDENT_SEMESTER_PLANS WHERE USERNAME = ANY')) {
+    const set = new Set((Array.isArray(params[0]) ? params[0] : []).map((u) => String(u).toLowerCase()));
+    const rows = memTables.student_semester_plans.filter((p) => set.has(p.username.toLowerCase()));
+    return { rows, rowCount: rows.length };
+  }
+
+  if (upper.startsWith('SELECT') && upper.includes('FROM RECOMMENDATION_FEEDBACK WHERE USERNAME = ANY')) {
+    const set = new Set((Array.isArray(params[0]) ? params[0] : []).map((u) => String(u).toLowerCase()));
+    const grouped = new Map();
+    for (const fb of memTables.recommendation_feedback) {
+      const k = fb.username.toLowerCase();
+      if (!set.has(k)) continue;
+      const prev = grouped.get(k);
+      if (!prev || new Date(fb.created_at) > new Date(prev.last_feedback_at)) {
+        grouped.set(k, { username: fb.username, last_feedback_at: fb.created_at });
+      }
+    }
+    const rows = Array.from(grouped.values());
+    return { rows, rowCount: rows.length };
+  }
+
   // --- GENERAL DELETE ---
   if (upper.includes('DELETE FROM STUDENT_GROUPS WHERE NAME LIKE')) {
     memTables.student_groups = memTables.student_groups.filter((g) => !g.name.toUpperCase().startsWith('TEST-'));
@@ -1152,6 +1414,47 @@ export async function initDb() {
           reviewed_by VARCHAR(255) DEFAULT 'Administrator',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_presence (
+          username VARCHAR(255) PRIMARY KEY,
+          last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          is_online BOOLEAN NOT NULL DEFAULT TRUE,
+          office_hours VARCHAR(255) DEFAULT '',
+          response_time_note VARCHAR(255) DEFAULT '',
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS advisor_messages (
+          id SERIAL PRIMARY KEY,
+          student_username VARCHAR(255) NOT NULL,
+          advisor_username VARCHAR(255) NOT NULL,
+          group_id INTEGER REFERENCES student_groups(id) ON DELETE SET NULL,
+          sender_username VARCHAR(255) NOT NULL,
+          content TEXT NOT NULL,
+          is_read BOOLEAN NOT NULL DEFAULT FALSE,
+          read_at TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_adv_msg_dialog ON advisor_messages(student_username, advisor_username, created_at ASC);
+        CREATE INDEX IF NOT EXISTS idx_adv_msg_advisor_unread ON advisor_messages(advisor_username, is_read, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_adv_msg_student_unread ON advisor_messages(student_username, is_read, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS group_announcements (
+          id SERIAL PRIMARY KEY,
+          group_id INTEGER NOT NULL REFERENCES student_groups(id) ON DELETE CASCADE,
+          advisor_username VARCHAR(255) NOT NULL,
+          content TEXT NOT NULL,
+          recipient_usernames JSONB NOT NULL DEFAULT '[]'::jsonb,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_grp_ann_group ON group_announcements(group_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS group_announcement_reads (
+          announcement_id INTEGER NOT NULL REFERENCES group_announcements(id) ON DELETE CASCADE,
+          student_username VARCHAR(255) NOT NULL,
+          read_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          PRIMARY KEY (announcement_id, student_username)
         );
 
         INSERT INTO recommendation_configs (version, min_ects, max_ects, gpa_weight, retake_weight, interest_weight, disabled_programs, created_by, is_active)

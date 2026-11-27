@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../api.js';
 import { useAuthStore } from '../stores/authStore.js';
 import { useToast } from '../shared/ui/Toast.jsx';
 import MyAdvisorCard from '../components/MyAdvisorCard.jsx';
@@ -13,6 +14,27 @@ export default function ProfilePage() {
   const [avatar, setAvatar] = useState(profile?.avatar_url || '');
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef(null);
+
+  // US30: Advisor Office Hours & Availability
+  const isAdvisor = profile?.role === 'Advisor';
+  const [officeHours, setOfficeHours] = useState('');
+  const [responseTimeNote, setResponseTimeNote] = useState('');
+  const [savingAvailability, setSavingAvailability] = useState(false);
+
+  useEffect(() => {
+    if (!isAdvisor) return;
+    let mounted = true;
+    api.getMyPresence()
+      .then((res) => {
+        if (!mounted || !res) return;
+        setOfficeHours(res.officeHours || '');
+        setResponseTimeNote(res.responseTimeNote || '');
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [isAdvisor]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -53,7 +75,6 @@ export default function ProfilePage() {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        // Сжатие до гарантированно легкого Data URL (~30-60 КБ)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
         setAvatar(dataUrl);
       };
@@ -74,16 +95,40 @@ export default function ProfilePage() {
     }
   };
 
+  const handleSaveAvailability = async (e) => {
+    if (e) e.preventDefault();
+    setSavingAvailability(true);
+    try {
+      const updated = await api.updateOfficeHours({
+        office_hours: officeHours,
+        response_time_note: responseTimeNote,
+      });
+      setOfficeHours(updated.officeHours || '');
+      setResponseTimeNote(updated.responseTimeNote || '');
+      toast.success('Office hours and availability saved!');
+    } catch (err) {
+      toast.error('Failed to update availability: ' + err.message);
+    } finally {
+      setSavingAvailability(false);
+    }
+  };
+
   return (
     <main className="page">
-      <div className="card" style={{ maxWidth: 640, margin: '2rem auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-          <button className="btn" onClick={() => navigate('/')}>← Back</button>
-          <h2 style={{ margin: 0 }}>My Profile</h2>
+      <div className="card" style={{ maxWidth: 680, margin: '2rem auto', padding: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button className="btn" onClick={() => navigate('/')}>← Back</button>
+            <h2 style={{ margin: 0, fontSize: '18px', color: '#002B49' }}>My Profile</h2>
+          </div>
+          {isAdvisor && (
+            <button className="btn btn-primary" onClick={() => navigate('/messages')}>
+              Open Advisor Inbox →
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-          {/* Аватар */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
             <div
               style={{
@@ -125,7 +170,6 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Данные */}
           <div style={{ flex: 1, minWidth: 250 }}>
             <div style={{ marginBottom: '1rem' }}>
               <label className="small muted">SDU Login (username)</label>
@@ -147,7 +191,7 @@ export default function ProfilePage() {
               />
             </div>
 
-            <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
               <button className="btn btn-primary" disabled={busy} onClick={handleSave}>
                 {busy ? 'Saving...' : 'Save Changes'}
               </button>
@@ -155,7 +199,72 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <MyAdvisorCard />
+        {isAdvisor ? (
+          <form
+            onSubmit={handleSaveAvailability}
+            style={{
+              marginTop: '1.75rem',
+              paddingTop: '1.5rem',
+              borderTop: '1px solid #D8E4F0',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '15px', color: '#002B49' }}>
+                🕒 Advisor Office Hours & Availability
+              </h3>
+              <span
+                style={{
+                  backgroundColor: '#E6F6EE',
+                  color: '#0B6B3A',
+                  border: '1px solid #B7E4CC',
+                  borderRadius: '999px',
+                  padding: '2px 9px',
+                  fontSize: '11.5px',
+                  fontWeight: 600,
+                }}
+              >
+                Visible to your assigned groups
+              </span>
+            </div>
+            <p className="muted small" style={{ marginTop: 0, marginBottom: '1rem' }}>
+              Set your consultation schedule and typical reply window so students know when to expect an answer.
+            </p>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label className="small muted" style={{ fontWeight: 600, color: '#334155' }}>
+                Office Hours
+              </label>
+              <input
+                value={officeHours}
+                onChange={(e) => setOfficeHours(e.target.value)}
+                maxLength={200}
+                placeholder="e.g. Mon, Wed 14:00-16:00 (Room F-302)"
+                style={{ width: '100%', marginTop: '0.4rem' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="small muted" style={{ fontWeight: 600, color: '#334155' }}>
+                Typical Answer Time
+              </label>
+              <input
+                value={responseTimeNote}
+                onChange={(e) => setResponseTimeNote(e.target.value)}
+                maxLength={255}
+                placeholder="e.g. Usually replies within 2 hours on weekdays"
+                style={{ width: '100%', marginTop: '0.4rem' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="submit" className="btn btn-primary" disabled={savingAvailability}>
+                {savingAvailability ? 'Saving...' : 'Save Availability'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          profile?.role !== 'Administrator' && <MyAdvisorCard />
+        )}
       </div>
     </main>
   );
