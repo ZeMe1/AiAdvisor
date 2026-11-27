@@ -320,9 +320,9 @@ CREATE TABLE IF NOT EXISTS group_announcement_reads (
 
 ## 6. Чек-лист готовности к деплою (Definition of Done)
 
-- [ ] Все 4 таблицы добавлены в конец `initDb()` в `server/db.mjs` + поддержаны в `handleMemQuery`.
-- [ ] Защищённые файлы Session Management и Auth не затронуты (`git diff` по ним пуст).
-- [ ] Реализованы бэкенд-слои (`schemas`, `repositories`, `services`, `controllers`, `routes`).
-- [ ] Реализованы фронтенд-слои (`api.js`, `messagesStore.js`, `Navbar.jsx`, `MyAdvisorCard.jsx`, `ProfilePage.jsx`, `MessagesPage.jsx`, CSS-стили).
-- [ ] Весь текст интерфейса проверен на 100% English-only и высокую контрастность.
-- [ ] Все тесты (`npm test` — все старые + новые тесты US26–US30) и сборка (`npm run web:build`) проходят на 100%.
+- [x] Все 4 таблицы добавлены в конец `initDb()` в `server/db.mjs` + поддержаны в `handleMemQuery`.
+- [x] Защищённые файлы Session Management и Auth не затронуты (`git diff` по ним пуст).
+- [x] Реализованы бэкенд-слои (`schemas`, `repositories`, `services`, `controllers`, `routes`).
+- [x] Реализованы фронтенд-слои (`api.js`, `messagesStore.js`, `Navbar.jsx`, `MyAdvisorCard.jsx`, `ProfilePage.jsx`, `MessagesPage.jsx`, CSS-стили).
+- [x] Весь текст интерфейса проверен на 100% English-only и высокую контрастность.
+- [x] Все тесты (`npm test` — все старые + новые тесты US26–US30) и сборка (`npm run web:build`) проходят на 100%.
