@@ -89,22 +89,38 @@ AiAdvisor/
 
 ---
 
-## 2. Защищённые файлы (СТРОЖАЙШИЙ ЗАПРЕТ НА ИЗМЕНЕНИЕ БЕЗ ЯВНОГО ТРЕБОВАНИЯ)
+## 2. Защищённые файлы и ПОЛНЫЙ ЗАПРЕТ НА ТРОГАНИЕ SESSION MANAGEMENT (ABSOLUTE FREEZE)
 
-Запрещено вносить изменения, рефакторить или удалять логику авторизации, сессий и отказоустойчивости в файлах:
+> [!CAUTION]
+> **АБСОЛЮТНЫЙ ЗАПРЕТ ДЛЯ ВСЕХ АГЕНТОВ (ЛОКАЛЬНО, В ТЕСТАХ, В ФИЧАХ, ПРИ РЕФАКТОРИНГЕ — ВЕЗДЕ):**
+> **КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО** трогать, изменять, «улучшать», оборачивать в прокси/моки или переписывать **ЛЮБЫЕ** файлы и механизмы, связанные с **Session Management, Authentication и подключением PostgreSQL пула к сессиям** — **НИ ПРИ КАКИХ ОБСТОЯТЕЛЬСТВАХ** (даже если у разработчика локально нет `.env.cloud`, не поднят PostgreSQL или падают локальные тесты!).
+>
+> **Строжайшие табу (нарушение ломает продакшен на Vercel):**
+> 1. **НЕ ТРОГАТЬ `pool.query` и `realPool` в `server/db.mjs`**: категорически запрещено переключать `useInMemory = true` внутри `catch` при ошибках SQL/сети на живом `realPool`. Любое переключение на in-memory стор при наличии `DATABASE_URL` мгновенно обнуляет таблицу `sessions` в памяти инстанса и выбрасывает всех пользователей с ошибкой `401 not authenticated`.
+> 2. **НЕ УДАЛЯТЬ существующие таблицы и сиды из `initDb()` в `server/db.mjs`**: при добавлении новых фич разрешается **ТОЛЬКО дописывать в конец** `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` для новых таблиц спринта, не трогая существующий DDL и механику пула.
+> 3. **НЕ ТРОГАТЬ цепочку сессии и куки**: `zeme_session` cookie -> `session.middleware.mjs` -> `session.repository.mjs` -> `auth.middleware.mjs` (`requireAuth` / `requireAdmin`) -> `auth.service.mjs` -> `authStore.js`. Не менять ни строчки в этой цепочке ни для локального запуска, ни для тестов, ни для новых спринтов!
+> 4. Если для новой фичи нужен доступ к текущему пользователю — **ТОЛЬКО ЧИТАТЬ** уже готовые `req.client.localUsername`, `req.client.localRole`, `req.session.username` после существующего `requireAuth` / `requireAdmin`.
+
+Запрещено вносить изменения, рефакторить или удалять логику авторизации, сессий, БД-пула и отказоустойчивости в файлах:
+- `server/middlewares/session.middleware.mjs`
 - `server/middlewares/auth.middleware.mjs`
 - `server/middlewares/error.middleware.mjs`
+- `server/controllers/auth.controller.mjs`
+- `server/routes/auth.routes.mjs`
 - `server/services/auth.service.mjs`
 - `server/services/schedule.service.mjs` (логика fallback, Stale-While-Revalidate и вызовы SDU)
 - `server/repositories/session.repository.mjs`
 - `server/repositories/cache.repository.mjs`
+- `server/db.mjs` (механика `pool` / `realPool` / `useInMemory`, таблица `sessions` и существующий DDL в `initDb()`)
 - `src/sdu/client.js`
 - `src/sdu/parsers/curriculum.js`
 - `web/src/stores/authStore.js`
 - `web/src/stores/scheduleStore.js`
+- `web/src/components/Login.jsx`
+- `web/src/components/TwoFa.jsx`
 - `web/src/pages/ElectivesPage.jsx` (обработка ошибок и восстановление стейта)
 - `web/src/pages/CoursePage.jsx`
-- `web/src/App.jsx` (auth gate)
+- `web/src/App.jsx` (auth gate и проверка `checkAuth`)
 
 ---
 
